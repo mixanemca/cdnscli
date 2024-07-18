@@ -40,6 +40,7 @@ var rootCmd = &cobra.Command{
 	Use:     "cfdnscli",
 	Short:   "Work with CloudFlare DNS easily from CLI!",
 	Version: ldflags.Version(),
+	Run:     func(cmd *cobra.Command, args []string) {},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -56,14 +57,15 @@ func init() {
 	vt := rootCmd.VersionTemplate()
 	rootCmd.SetVersionTemplate(vt[:len(vt)-1] + " (" + build + ")\n")
 
-	cobra.OnInitialize(initConfig)
+	// TODO: add config package
+	// cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
-	rootCmd.PersistentFlags().IntVarP(&clientTimeout, "timeout", "", 5, "client timeout in seconds")
+	rootCmd.PersistentFlags().IntVarP(&clientTimeout, "timeout", "T", 5, "client timeout in seconds")
 	rootCmd.PersistentFlags().StringVarP(&outputType, "output-type", "o", "text", "print output in format: text/json")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "turn on debug output to STDERR")
 
