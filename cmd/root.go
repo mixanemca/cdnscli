@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/version-go/ldflags"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
@@ -36,8 +37,9 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cfdnscli",
-	Short: "Work with CloudFlare DNS easily from CLI!",
+	Use:     "cfdnscli",
+	Short:   "Work with CloudFlare DNS easily from CLI!",
+	Version: ldflags.Version(),
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -50,6 +52,10 @@ func Execute() {
 }
 
 func init() {
+	build := ldflags.Build()
+	vt := rootCmd.VersionTemplate()
+	rootCmd.SetVersionTemplate(vt[:len(vt)-1] + " (" + build + ")\n")
+
 	cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
