@@ -18,6 +18,11 @@ This utility will allow you to work with CloudFlare DNS from the CLI:
 cfdnscli help
 ```
 
+#### Receiving a token
+
+Login to CloudFlare [dash](https://dash.cloudflare.com/login).  
+Go to `My Account` -> `API Tokens` and create a new token.
+
 ## Examples
 
 Add or change resource records
