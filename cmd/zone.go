@@ -20,7 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// fzCmd represents the fz command
+// zoneCmd represents the zone command
 var zoneCmd = &cobra.Command{
 	Use:   "zone",
 	Short: "Management of zones",
