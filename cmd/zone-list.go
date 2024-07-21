@@ -47,7 +47,7 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	zones, err := a.Zones().ListZones(context.Background())
+	zones, err := a.Zones().List(context.Background())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

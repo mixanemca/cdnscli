@@ -22,8 +22,8 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 )
 
-// ListZones return lists zones on an account.
-func (c *client) ListZones(ctx context.Context) ([]cloudflare.Zone, error) {
+// List return lists zones on an account.
+func (c *client) List(ctx context.Context) ([]cloudflare.Zone, error) {
 	zones, err := c.api.ListZones(ctx)
 	if err != nil {
 		return nil, err
