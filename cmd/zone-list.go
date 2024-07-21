@@ -48,8 +48,10 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	defer cancel()
+
 	var zones []cloudflare.Zone
-	ctx := context.Background()
 	if len(name) > 0 {
 		zones, err = a.Zones().ListByName(ctx, name)
 	} else {

@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/version-go/ldflags"
@@ -29,7 +30,7 @@ import (
 
 var (
 	cfgFile       string
-	clientTimeout int
+	clientTimeout time.Duration
 	content       string
 	debug         bool
 	name          string
@@ -66,7 +67,7 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
-	rootCmd.PersistentFlags().IntVarP(&clientTimeout, "timeout", "T", 5, "client timeout in seconds")
+	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 5*time.Second, "client timeout")
 	rootCmd.PersistentFlags().StringVarP(&outputType, "output-type", "o", "text", "print output in format: text/json")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "turn on debug output to STDERR")
 
