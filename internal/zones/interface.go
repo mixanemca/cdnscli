@@ -23,6 +23,8 @@ import (
 )
 
 type Client interface {
-	// List lists zones on an account.
+	// List lists the zones on an account.
 	List(ctx context.Context) ([]cloudflare.Zone, error)
+	// ListByName lists the zone in an account using the zone name for filtering.
+	ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error)
 }

@@ -31,3 +31,13 @@ func (c *client) List(ctx context.Context) ([]cloudflare.Zone, error) {
 
 	return zones, nil
 }
+
+// ListByName return lists zones on an account using the zone name for filtering.
+func (c *client) ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error) {
+	zones, err := c.api.ListZones(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	return zones, nil
+}

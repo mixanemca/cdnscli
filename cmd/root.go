@@ -32,6 +32,7 @@ var (
 	clientTimeout int
 	content       string
 	debug         bool
+	name          string
 	outputType    string
 )
 

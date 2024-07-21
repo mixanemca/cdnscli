@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/app"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,7 @@ import (
 var zoneListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Use:     "list",
-	Short:   "Lists zones on an account. ",
+	Short:   "Lists zones on an account. Optionally takes a name of zone to filter against.",
 	Example: "  cfdnscli zone list",
 	Run:     zoneListRun,
 }
@@ -37,7 +38,7 @@ var zoneListCmd = &cobra.Command{
 func init() {
 	zoneCmd.AddCommand(zoneListCmd)
 
-	// zoneListCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of zone")
+	zoneListCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of zone to filter against")
 }
 
 func zoneListRun(cmd *cobra.Command, args []string) {
@@ -47,7 +48,13 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	zones, err := a.Zones().List(context.Background())
+	var zones []cloudflare.Zone
+	ctx := context.Background()
+	if len(name) > 0 {
+		zones, err = a.Zones().ListByName(ctx, name)
+	} else {
+		zones, err = a.Zones().List(ctx)
+	}
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
