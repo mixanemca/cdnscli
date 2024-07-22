@@ -35,6 +35,7 @@ var (
 	debug         bool
 	name          string
 	outputType    string
+	zone          string
 )
 
 // rootCmd represents the base command when called without any subcommands
