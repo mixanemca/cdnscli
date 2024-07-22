@@ -41,3 +41,19 @@ func (c *client) ListByName(ctx context.Context, name string) ([]cloudflare.Zone
 
 	return zones, nil
 }
+
+// ListRecords returns a slice of DNS records for the given zone identifier.
+func (c *client) ListRecords(ctx context.Context, zone string) ([]cloudflare.DNSRecord, error) {
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch all records for a zone
+	recs, _, err := c.api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	return recs, nil
+}

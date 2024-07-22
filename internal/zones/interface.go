@@ -27,4 +27,6 @@ type Client interface {
 	List(ctx context.Context) ([]cloudflare.Zone, error)
 	// ListByName lists the zone in an account using the zone name for filtering.
 	ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error)
+	// ListRecords returns a slice of DNS records for the given zone identifier.
+	ListRecords(ctx context.Context, zone string) ([]cloudflare.DNSRecord, error)
 }
