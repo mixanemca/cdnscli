@@ -18,9 +18,44 @@ package zones
 
 import (
 	"context"
+	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
 )
+
+// GetRRByName returns a single DNS record for the given zone & record identifiers.
+func (c *client) GetRRByName(ctx context.Context, name, zone string) (cloudflare.DNSRecord, error) {
+	var rr cloudflare.DNSRecord
+
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return rr, err
+	}
+
+	// Create a ResourceContainer for the zone
+	rc := cloudflare.ResourceContainer{
+		Level:      cloudflare.ZoneRouteLevel,
+		Identifier: zoneID,
+		Type:       cloudflare.ZoneType,
+	}
+
+	recs, _, err := c.api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
+		Name: strings.Join([]string{name, zone}, "."),
+	})
+	if err != nil {
+		return rr, err
+	}
+
+	// TODO: this code need to refactoring
+	for _, rec := range recs {
+		rr, err = c.api.GetDNSRecord(ctx, &rc, rec.ID)
+		if err != nil {
+			return rr, err
+		}
+	}
+
+	return rr, nil
+}
 
 // List return lists zones on an account.
 func (c *client) List(ctx context.Context) ([]cloudflare.Zone, error) {
