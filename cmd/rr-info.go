@@ -1,0 +1,64 @@
+/*
+Copyright © 2024 Michael Bruskov <mixanemca@yandex.ru>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/mixanemca/cfdnscli/app"
+	"github.com/spf13/cobra"
+)
+
+// rrInfoCmd represents the info (details) command
+var rrInfoCmd = &cobra.Command{
+	Aliases: []string{"details"},
+	Args:    cobra.NoArgs,
+	Use:     "info",
+	Short:   "Details for a single DNS record",
+	Example: `  cfdnscli rr info --name www --zone example.com`,
+	Run:     rrInfoCmdRun,
+}
+
+func init() {
+	rrCmd.AddCommand(rrInfoCmd)
+
+	rrInfoCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "recource record name")
+	rrInfoCmd.MarkPersistentFlagRequired("name")
+	rrInfoCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "zone name")
+	rrInfoCmd.MarkPersistentFlagRequired("zone")
+}
+
+func rrInfoCmdRun(cmd *cobra.Command, args []string) {
+	a, err := app.New()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	defer cancel()
+
+	rr, err := a.Zones().GetRRByName(ctx, name, zone)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Println(rr)
+}
