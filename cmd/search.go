@@ -19,7 +19,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/app"
 	"github.com/spf13/cobra"
 )
@@ -36,14 +38,19 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 
 	searchCmd.PersistentFlags().StringVarP(&content, "content", "c", "", "the content string to search for")
-	searchCmd.MarkPersistentFlagRequired("content")
+	searchCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "the resourse record name to search for")
 	// searchCmd.PersistentFlags().IntVarP(&max, "max", "m", 10, "maximum number of entries to return")
 	// searchCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "A", "type of resorce record to search for")
-	searchCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "zone name")
+	searchCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "the zone name")
 	searchCmd.MarkPersistentFlagRequired("zone")
 }
 
 func searchCmdRun(cmd *cobra.Command, args []string) {
+	if len(content) == 0 && len(name) == 0 {
+		fmt.Println("ERROR: you must specify one of the search parameters - content or name")
+		os.Exit(1)
+	}
+
 	a, err := app.New()
 	if err != nil {
 		fmt.Println(err)
@@ -53,7 +60,14 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	results, err := a.Zones().ListByContent(ctx, zone, content)
+	if len(name) > 0 {
+		name = strings.Join([]string{name, zone}, ".")
+	}
+
+	results, err := a.Zones().ListRecords(ctx, zone, cloudflare.ListDNSRecordsParams{
+		Content: content,
+		Name:    name,
+	})
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
