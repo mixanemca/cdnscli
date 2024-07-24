@@ -77,6 +77,24 @@ func (c *client) ListByName(ctx context.Context, name string) ([]cloudflare.Zone
 	return zones, nil
 }
 
+// ListByContent returns a slice of DNS records for the given content string.
+func (c *client) ListByContent(ctx context.Context, zone, content string) ([]cloudflare.DNSRecord, error) {
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return nil, err
+	}
+
+	// Search all records in a zone with given content.
+	recs, _, err := c.api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
+		Content: content,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return recs, nil
+}
+
 // ListRecords returns a slice of DNS records for the given zone identifier.
 func (c *client) ListRecords(ctx context.Context, zone string) ([]cloudflare.DNSRecord, error) {
 	zoneID, err := c.api.ZoneIDByName(zone)

@@ -27,6 +27,8 @@ type Client interface {
 	GetRRByName(ctx context.Context, name, zone string) (cloudflare.DNSRecord, error)
 	// List lists the zones on an account.
 	List(ctx context.Context) ([]cloudflare.Zone, error)
+	// ListByContent returns a slice of DNS records for the given content string.
+	ListByContent(ctx context.Context, zone, content string) ([]cloudflare.DNSRecord, error)
 	// ListByName lists the zone in an account using the zone name for filtering.
 	ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error)
 	// ListRecords returns a slice of DNS records for the given zone identifier.
