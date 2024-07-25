@@ -23,7 +23,9 @@ import (
 )
 
 type Client interface {
-	// GetRRByName returns a single DNS record for the given zone & record identifiers.
+	// AddRR creates a new DNS resource record for a zone.
+	AddRR(ctx context.Context, zone string, params cloudflare.CreateDNSRecordParams) (cloudflare.DNSRecord, error)
+	// GetRRByName returns a single DNS resource record for the given zone & record identifiers.
 	GetRRByName(ctx context.Context, name, zone string) (cloudflare.DNSRecord, error)
 	// List lists the zones on an account.
 	List(ctx context.Context) ([]cloudflare.Zone, error)

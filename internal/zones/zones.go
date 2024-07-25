@@ -23,6 +23,30 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 )
 
+// AddRR creates a new DNS resource record for a zone.
+func (c *client) AddRR(ctx context.Context, zone string, params cloudflare.CreateDNSRecordParams) (cloudflare.DNSRecord, error) {
+	var rr cloudflare.DNSRecord
+
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return rr, err
+	}
+
+	// Create a ResourceContainer for the zone
+	rc := cloudflare.ResourceContainer{
+		Level:      cloudflare.ZoneRouteLevel,
+		Identifier: zoneID,
+		Type:       cloudflare.ZoneType,
+	}
+
+	rr, err = c.api.CreateDNSRecord(ctx, &rc, params)
+	if err != nil {
+		return rr, err
+	}
+
+	return rr, nil
+}
+
 // GetRRByName returns a single DNS record for the given zone & record identifiers.
 func (c *client) GetRRByName(ctx context.Context, name, zone string) (cloudflare.DNSRecord, error) {
 	var rr cloudflare.DNSRecord
