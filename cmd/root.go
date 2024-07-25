@@ -36,6 +36,7 @@ var (
 	name          string
 	outputType    string
 	rrtype        string
+	ttl           int
 	zone          string
 )
 
