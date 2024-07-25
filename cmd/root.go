@@ -35,6 +35,7 @@ var (
 	debug         bool
 	name          string
 	outputType    string
+	rrtype        string
 	zone          string
 )
 

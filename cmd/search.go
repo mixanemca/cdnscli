@@ -40,14 +40,14 @@ func init() {
 	searchCmd.PersistentFlags().StringVarP(&content, "content", "c", "", "the content string to search for")
 	searchCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "the resourse record name to search for")
 	// searchCmd.PersistentFlags().IntVarP(&max, "max", "m", 10, "maximum number of entries to return")
-	// searchCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "A", "type of resorce record to search for")
+	searchCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "type of resorce record to search for")
 	searchCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "the zone name")
 	searchCmd.MarkPersistentFlagRequired("zone")
 }
 
 func searchCmdRun(cmd *cobra.Command, args []string) {
-	if len(content) == 0 && len(name) == 0 {
-		fmt.Println("ERROR: you must specify one of the search parameters - content or name")
+	if len(content) == 0 && len(name) == 0 && len(rrtype) == 0 {
+		fmt.Println("ERROR: you must specify one of the search parameters - content, name or type")
 		os.Exit(1)
 	}
 
@@ -67,6 +67,7 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 	results, err := a.Zones().ListRecords(ctx, zone, cloudflare.ListDNSRecordsParams{
 		Content: content,
 		Name:    name,
+		Type:    rrtype,
 	})
 	if err != nil {
 		fmt.Println(err)
