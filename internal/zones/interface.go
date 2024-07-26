@@ -23,7 +23,7 @@ import (
 )
 
 type Client interface {
-	// AddRR creates a new DNS resource record for a zone.
+	// AddRR creates a new DNS resource record for a given zone.
 	AddRR(ctx context.Context, zone string, params cloudflare.CreateDNSRecordParams) (cloudflare.DNSRecord, error)
 	// DeleteRR deletes a DNS resource record from a given zone.
 	DeleteRR(ctx context.Context, zone string, rr cloudflare.DNSRecord) error
