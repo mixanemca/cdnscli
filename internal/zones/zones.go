@@ -47,6 +47,28 @@ func (c *client) AddRR(ctx context.Context, zone string, params cloudflare.Creat
 	return rr, nil
 }
 
+// DeleteRR deletes a DNS resource record from a given zone.
+func (c *client) DeleteRR(ctx context.Context, zone string, rr cloudflare.DNSRecord) error {
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return err
+	}
+
+	// Create a ResourceContainer for the zone
+	rc := cloudflare.ResourceContainer{
+		Level:      cloudflare.ZoneRouteLevel,
+		Identifier: zoneID,
+		Type:       cloudflare.ZoneType,
+	}
+
+	err = c.api.DeleteDNSRecord(ctx, &rc, rr.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetRRByName returns a single DNS record for the given zone & record identifiers.
 func (c *client) GetRRByName(ctx context.Context, zone, name string) (cloudflare.DNSRecord, error) {
 	var rr cloudflare.DNSRecord
