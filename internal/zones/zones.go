@@ -48,7 +48,7 @@ func (c *client) AddRR(ctx context.Context, zone string, params cloudflare.Creat
 }
 
 // GetRRByName returns a single DNS record for the given zone & record identifiers.
-func (c *client) GetRRByName(ctx context.Context, name, zone string) (cloudflare.DNSRecord, error) {
+func (c *client) GetRRByName(ctx context.Context, zone, name string) (cloudflare.DNSRecord, error) {
 	var rr cloudflare.DNSRecord
 
 	zoneID, err := c.api.ZoneIDByName(zone)
