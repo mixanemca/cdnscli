@@ -46,6 +46,7 @@ func init() {
 	rrAddCmd.MarkPersistentFlagRequired("zone")
 	rrAddCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "Resource record name")
 	rrAddCmd.MarkPersistentFlagRequired("name")
+	rrAddCmd.PersistentFlags().BoolVarP(&proxied, "proxied", "p", false, "Whether the record is receiving the performance and security benefits of Cloudflare")
 	rrAddCmd.PersistentFlags().IntVarP(&ttl, "ttl", "l", 1800, "The time to live of the resource record in seconds")
 	rrAddCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "Type of the resource record (A, CNAME)")
 	rrAddCmd.MarkPersistentFlagRequired("type")
@@ -71,6 +72,7 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 	params := cloudflare.CreateDNSRecordParams{
 		Content: content,
 		Name:    name,
+		Proxied: cloudflare.BoolPtr(proxied),
 		TTL:     ttl,
 		Type:    rrtype,
 	}

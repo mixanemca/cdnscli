@@ -35,6 +35,7 @@ var (
 	debug         bool
 	name          string
 	outputType    string
+	proxied       bool
 	rrtype        string
 	ttl           int
 	zone          string
