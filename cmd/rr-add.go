@@ -33,7 +33,7 @@ var rrAddCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "add",
 	Short:   "Add resource record to zone",
-	Example: `  cfdnscli rr add --name www --zone example.com --type A --ttl 400 --content 10.0.0.1`,
+	Example: `  cfdnscli rr add --name www --zone example.com --type A --ttl 400 --content 192.0.2.1`,
 	Run:     rrAddCmdRun,
 }
 
