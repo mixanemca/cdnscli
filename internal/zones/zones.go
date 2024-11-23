@@ -69,6 +69,36 @@ func (c *client) DeleteRR(ctx context.Context, zone string, rr cloudflare.DNSRec
 	return nil
 }
 
+// UpdateRR updates an existing DNS resource record
+func (c *client) UpdateRR(ctx context.Context, zone string, rr cloudflare.DNSRecord) (cloudflare.DNSRecord, error) {
+	zoneID, err := c.api.ZoneIDByName(zone)
+	if err != nil {
+		return cloudflare.DNSRecord{}, err
+	}
+
+	// Create a ResourceContainer
+	rc := cloudflare.ResourceContainer{
+		Level:      cloudflare.ZoneRouteLevel,
+		Identifier: zoneID,
+		Type:       cloudflare.ZoneType,
+	}
+
+	updateParams := cloudflare.UpdateDNSRecordParams{
+		Comment:  &rr.Comment,
+		Content:  rr.Content,
+		Data:     rr.Data,
+		ID:       rr.ID,
+		Name:     rr.Name,
+		Priority: rr.Priority,
+		Proxied:  rr.Proxied,
+		Tags:     rr.Tags,
+		TTL:      rr.TTL,
+		Type:     rr.Type,
+	}
+
+	return c.api.UpdateDNSRecord(ctx, &rc, updateParams)
+}
+
 // GetRRByName returns a single DNS record for the given zone & record identifiers.
 func (c *client) GetRRByName(ctx context.Context, zone, name string) (cloudflare.DNSRecord, error) {
 	var rr cloudflare.DNSRecord
