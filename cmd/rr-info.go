@@ -54,7 +54,7 @@ func rrInfoCmdRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	rr, err := a.Zones().GetRRByName(ctx, name, zone)
+	rr, err := a.Zones().GetRRByName(ctx, zone, name)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
