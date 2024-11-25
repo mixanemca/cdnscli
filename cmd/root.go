@@ -18,9 +18,14 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/mixanemca/cfdnscli/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/version-go/ldflags"
 
@@ -46,7 +51,7 @@ var rootCmd = &cobra.Command{
 	Use:     "cfdnscli",
 	Short:   "Work with CloudFlare DNS easily from CLI!",
 	Version: ldflags.Version(),
-	Run:     func(cmd *cobra.Command, args []string) {},
+	Run:     rootCmdRun,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -78,6 +83,49 @@ func init() {
 	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
 	viper.BindPFlag("output-type", rootCmd.PersistentFlags().Lookup("output-type"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+}
+
+func rootCmdRun(cmd *cobra.Command, args []string) {
+	tableStyle := table.DefaultStyles()
+	tableStyle.Selected = lipgloss.NewStyle().Background(ui.Color.Highlight)
+
+	// Creates a new table with specified columns and initial empty rows.
+	zonesTable := table.New(
+		table.WithColumns([]table.Column{
+			{Title: "Name", Width: 30},
+			{Title: "NS", Width: 70},
+		}),
+		table.WithRows([]table.Row{}),
+		table.WithFocused(true),
+		table.WithHeight(50),
+		table.WithStyles(tableStyle),
+	)
+	rrsetTable := table.New(
+		table.WithColumns([]table.Column{
+			{Title: "Name", Width: 30},
+			{Title: "TTL", Width: 8},
+			{Title: "Type", Width: 8},
+			{Title: "Content", Width: 54},
+		}),
+		table.WithRows([]table.Row{}),
+		table.WithFocused(false),
+		table.WithHeight(50),
+		table.WithStyles(tableStyle),
+	)
+
+	m := ui.NewModel()
+	m.ClientTimeout = clientTimeout
+	m.ZonesTable = zonesTable
+	m.RRSetTable = rrsetTable
+	m.TableStyle = tableStyle
+
+	// Create a new Bubble Tea program with the model and enable alternate screen
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Run the program and handle any errors
+	if _, err := p.Run(); err != nil {
+		log.Fatalf("Error running program: %v", err)
+	}
 }
 
 // initConfig reads in config file and ENV variables if set.
