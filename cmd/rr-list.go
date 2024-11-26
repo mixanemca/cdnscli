@@ -53,7 +53,7 @@ func rrListCmdRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	recs, err := a.Zones().ListRecords(ctx, zone, cloudflare.ListDNSRecordsParams{})
+	recs, err := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

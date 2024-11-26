@@ -33,8 +33,10 @@ type Client interface {
 	List(ctx context.Context) ([]cloudflare.Zone, error)
 	// ListByName lists the zone in an account using the zone name for filtering.
 	ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error)
-	// ListRecords returns a slice of DNS records for the given zone identifier.
-	ListRecords(ctx context.Context, zone string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error)
+	// ListRecordsByZoneName returns a slice of DNS records for the given zone name.
+	ListRecordsByZoneName(ctx context.Context, zone string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error)
+	// ListRecordsByZoneName returns a slice of DNS records for the given zone identifier.
+	ListRecordsByZoneID(ctx context.Context, id string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error)
 	// UpdateRR updates and returns an existing DNS resource record.
 	UpdateRR(ctx context.Context, zone string, rr cloudflare.DNSRecord) (cloudflare.DNSRecord, error)
 }

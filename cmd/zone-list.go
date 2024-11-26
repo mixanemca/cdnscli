@@ -62,5 +62,5 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Println(zones)
+	fmt.Printf("%#v\n", zones)
 }
