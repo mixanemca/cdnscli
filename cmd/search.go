@@ -64,7 +64,7 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 		name = strings.Join([]string{name, zone}, ".")
 	}
 
-	results, err := a.Zones().ListRecords(ctx, zone, cloudflare.ListDNSRecordsParams{
+	results, err := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{
 		Content: content,
 		Name:    name,
 		Type:    rrtype,
