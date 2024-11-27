@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -92,6 +93,8 @@ func (m *Model) Init() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 		defer cancel()
 
+		var wg sync.WaitGroup
+
 		zones, _ := a.Zones().List(ctx)
 		rows := []table.Row{}
 		for _, zone := range zones {
@@ -99,8 +102,11 @@ func (m *Model) Init() tea.Cmd {
 				zone.Name,
 				strings.Join(zone.NameServers, ", "),
 			})
+			wg.Add(1)
+			go m.updateRRSet(&wg, zone.Name)
 		}
 		m.ZonesTable.SetRows(rows)
+		wg.Wait()
 
 		return m
 	}
@@ -168,12 +174,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Custom messages
 	case switchTableToRRSetCmd:
 		m.switchTable("RRSet")
-		selectedRow := m.ZonesTable.SelectedRow()
-		if len(selectedRow) > 0 {
-			if _, ok := m.rrsetCache[selectedRow[0]]; !ok {
-				m.updateRRSet(selectedRow[0])
-			}
-		}
 	}
 	// If the message type does not match any of the handled cases, the model is returned unchanged, and no new command is issued.
 	return m, nil
@@ -197,23 +197,15 @@ func (m *Model) viewZones() string {
 }
 
 func (m *Model) viewRRSet() string {
-	return m.ViewStyle.Render(m.RRSetTable.View())
-}
+	var rrset []cloudflare.DNSRecord
 
-func (m *Model) handleEnter(tea.Msg) tea.Cmd {
-	return func() tea.Msg {
-		return switchTableToRRSetCmd("RRSet")
+	selectedRow := m.ZonesTable.SelectedRow()
+	if len(selectedRow) > 0 {
+		if _, ok := m.rrsetCache[selectedRow[0]]; ok {
+			rrset = m.rrsetCache[selectedRow[0]]
+		}
 	}
-}
 
-// updateRRSet updates resource records set by given zone name.
-func (m *Model) updateRRSet(zone string) {
-	a, _ := app.New()
-	ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-	defer cancel()
-
-	rrset, _ := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
-	m.rrsetCache[zone] = rrset
 	rows := []table.Row{}
 	for _, rr := range rrset {
 		rows = append(rows, table.Row{
@@ -225,6 +217,26 @@ func (m *Model) updateRRSet(zone string) {
 		})
 	}
 	m.RRSetTable.SetRows(rows)
+
+	return m.ViewStyle.Render(m.RRSetTable.View())
+}
+
+func (m *Model) handleEnter(tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		return switchTableToRRSetCmd("RRSet")
+	}
+}
+
+// updateRRSet updates resource records set by given zone name.
+func (m *Model) updateRRSet(wg *sync.WaitGroup, zone string) {
+	defer wg.Done()
+
+	a, _ := app.New()
+	ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+	defer cancel()
+
+	rrset, _ := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
+	m.rrsetCache[zone] = rrset
 }
 
 // switchTable switches focus between zones and rrset tables
