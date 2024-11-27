@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -36,16 +37,39 @@ const (
 	crossMark = "𐄂"
 )
 
+const (
+	zonesTable = "zones"
+	rrsetTable = "rrset"
+)
+
+const (
+	tableStatusRecord  = "record"
+	tableStatusRecords = "records"
+	tableStatusZone    = "zone"
+	tableStatusZones   = "zones"
+)
+
+const (
+	headerHeight = 3
+	statusHeight = 1
+	menuHeight   = 1
+)
+
 // Ensure that model fulfils the tea.Model interface at compile time.
 var _ tea.Model = (*Model)(nil)
 
 // Custom tea.Msg to switching between zones and rrset tables.
-type switchTableToRRSetCmd string
+type (
+	switchTableToRRSetCmd string
+	dataLoadedMsg         struct{}
+)
 
 // Model represents model for implements bubbletea.Model interface
 type Model struct {
 	width      int
 	height     int
+	spinner    spinner.Model
+	loading    bool
 	current    *table.Model
 	rrsetCache map[string][]cloudflare.DNSRecord
 
@@ -54,7 +78,6 @@ type Model struct {
 	ZonesTable table.Model
 	RRSetTable table.Model
 	TableStyle table.Styles
-	BaseStyle  lipgloss.Style
 	ViewStyle  lipgloss.Style
 }
 
@@ -80,15 +103,19 @@ func NewModel() *Model {
 	var m Model
 
 	m.rrsetCache = make(map[string][]cloudflare.DNSRecord)
-	m.BaseStyle = lipgloss.NewStyle()
-	m.ViewStyle = lipgloss.NewStyle()
+	m.ViewStyle = lipgloss.NewStyle().
+		Padding(0, 0).
+		Width(m.width)
+	m.spinner = spinner.New()
+	m.spinner.Spinner = spinner.Points
+	m.loading = true
 
 	return &m
 }
 
 // This command will be executed immediately when the program starts.
 func (m *Model) Init() tea.Cmd {
-	return func() tea.Msg {
+	return tea.Batch(m.spinner.Tick, func() tea.Msg {
 		a, _ := app.New()
 		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 		defer cancel()
@@ -106,38 +133,29 @@ func (m *Model) Init() tea.Cmd {
 			go m.updateRRSet(&wg, zone.Name)
 		}
 		m.ZonesTable.SetRows(rows)
+		m.current = &m.ZonesTable
+
 		wg.Wait()
 
-		return m
-	}
+		return dataLoadedMsg{}
+	})
 }
 
 func (m *Model) View() string {
-	m.current = &m.ZonesTable
 	table := m.viewZones()
 	if m.RRSetTable.Focused() {
 		m.current = &m.RRSetTable
 		table = m.viewRRSet()
 	}
-	// Sets the width of the column to the width of the terminal (m.width) and adds padding of 1 unit on the top.
-	// Render is a method from the lipgloss package that applies the defined style and returns a function that can render styled content.
-	column := m.BaseStyle.Width(m.width).Padding(1, 0, 0, 0).Render
-	// Set the content to match the terminal dimensions (m.width and m.height).
-	content := m.BaseStyle.
-		Width(m.width).
-		Height(m.height).
-		Render(
-			// Vertically join multiple elements aligned to the left.
-			lipgloss.JoinVertical(lipgloss.Left,
-				column(m.viewHeader()),
-				column(table),
-			),
-			lipgloss.JoinVertical(lipgloss.Right,
-				column(m.viewMenu()),
-			),
-		)
 
-	return content
+	return m.ViewStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			m.viewHeader(),
+			table,
+			m.viewStatusBar(),
+			m.viewMenu(),
+		),
+	)
 }
 
 // Takes a tea.Msg as input and uses a type switch to handle different types of messages.
@@ -155,13 +173,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		// Toggles the focus state of the process table
 		case "esc":
-			m.switchTable("Zones")
+			m.switchTable(zonesTable)
 		// Moves the focus up in the process table if the table is focused.
 		case "up", "k":
 			m.current.MoveUp(1)
+			return m, m.spinner.Tick
 		// Moves the focus down in the process table if the table is focused.
 		case "down", "j":
 			m.current.MoveDown(1)
+			return m, m.spinner.Tick
 		// Quits the program by returning the tea.Quit command.
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -170,30 +190,83 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter, tea.KeySpace:
 			return m, m.handleEnter(msg)
 		}
+		if m.loading {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 
+	case dataLoadedMsg:
+		m.loading = false
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	// Custom messages
 	case switchTableToRRSetCmd:
-		m.switchTable("RRSet")
+		m.switchTable(rrsetTable)
 	}
+
 	// If the message type does not match any of the handled cases, the model is returned unchanged, and no new command is issued.
 	return m, nil
 }
 
-// Uses lipgloss.JoinVertical and lipgloss.JoinHorizontal to arrange the header content.
 func (m *Model) viewHeader() string {
-	return m.ViewStyle.Render(
-		lipgloss.JoinVertical(lipgloss.Top,
-			fmt.Sprintf("CloudFlare DNS CLI\n"),
-		),
-	)
+	headerStyle := lipgloss.NewStyle().
+		Padding(1, 1).
+		Width(m.width).
+		Height(headerHeight)
+
+	return headerStyle.Render("CloudFlare DNS CLI")
 }
 
 func (m *Model) viewMenu() string {
-	return fmt.Sprintf("Press Enter to select, Esc to return, arrow keys to move, / to find, Ctrl+C or q to exit")
+	// return fmt.Sprintf("Press Enter to select, Esc to return, arrow keys to move, / to find, Ctrl+C or q to exit\n")
+	menuStyle := lipgloss.NewStyle().
+		Padding(0, 1).
+		Width(m.width).
+		Height(menuHeight)
+
+	menu := []string{
+		"[↑/↓/←/→] Navigate",
+		"[Enter] Edit",
+		"[Esc] Exit edit",
+		"[q] Quit",
+	}
+
+	return menuStyle.Render(strings.Join(menu, " | "))
+}
+
+func (m *Model) viewStatusBar() string {
+	// return fmt.Sprintf("%s%s%s", m.spinner.View(), " ", "Spinning...")
+	statusStyle := lipgloss.NewStyle().
+		Foreground(Color.Secondary).
+		Padding(0, 1).
+		Width(m.width).
+		Height(statusHeight)
+
+	if m.loading {
+		return statusStyle.Render(fmt.Sprintf("Loading... %s", m.spinner.View()))
+	}
+	rows := len(m.RRSetTable.Rows())
+	table := tableStatusRecords
+	if rows == 1 {
+		table = tableStatusRecord
+	}
+	if m.ZonesTable.Focused() {
+		rows = len(m.ZonesTable.Rows())
+		table = tableStatusZones
+		if rows == 1 {
+			table = tableStatusZone
+		}
+	}
+
+	return statusStyle.Render(fmt.Sprintf("Loaded %d %s", rows, table))
 }
 
 func (m *Model) viewZones() string {
-	return m.ViewStyle.Render(m.ZonesTable.View())
+	return m.ZonesTable.View()
 }
 
 func (m *Model) viewRRSet() string {
@@ -218,12 +291,12 @@ func (m *Model) viewRRSet() string {
 	}
 	m.RRSetTable.SetRows(rows)
 
-	return m.ViewStyle.Render(m.RRSetTable.View())
+	return m.RRSetTable.View()
 }
 
 func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 	return func() tea.Msg {
-		return switchTableToRRSetCmd("RRSet")
+		return switchTableToRRSetCmd(rrsetTable)
 	}
 }
 
@@ -242,11 +315,11 @@ func (m *Model) updateRRSet(wg *sync.WaitGroup, zone string) {
 // switchTable switches focus between zones and rrset tables
 func (m *Model) switchTable(name string) {
 	switch name {
-	case "Zones":
+	case zonesTable:
 		m.ZonesTable.Focus()
 		m.RRSetTable.Blur()
 		m.current = &m.ZonesTable
-	case "RRSet":
+	case rrsetTable:
 		m.ZonesTable.Blur()
 		m.RRSetTable.Focus()
 		m.current = &m.RRSetTable
