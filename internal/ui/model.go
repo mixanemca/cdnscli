@@ -30,6 +30,11 @@ import (
 	"github.com/mixanemca/cfdnscli/app"
 )
 
+const (
+	checkMark = "✓"
+	crossMark = "𐄂"
+)
+
 // Ensure that model fulfils the tea.Model interface at compile time.
 var _ tea.Model = (*Model)(nil)
 
@@ -215,6 +220,7 @@ func (m *Model) updateRRSet(zone string) {
 			rr.Name,
 			strconv.Itoa(rr.TTL),
 			rr.Type,
+			boolToCheckMark(cloudflare.Bool(rr.Proxied)),
 			rr.Content,
 		})
 	}
@@ -233,4 +239,11 @@ func (m *Model) switchTable(name string) {
 		m.RRSetTable.Focus()
 		m.current = &m.RRSetTable
 	}
+}
+
+func boolToCheckMark(b bool) string {
+	if b {
+		return checkMark
+	}
+	return crossMark
 }

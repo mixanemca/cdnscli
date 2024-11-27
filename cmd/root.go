@@ -92,8 +92,8 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 	// Creates a new table with specified columns and initial empty rows.
 	zonesTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Name", Width: 30},
-			{Title: "NS", Width: 70},
+			{Title: "Name", Width: 50},
+			{Title: "NS", Width: 100},
 		}),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),
@@ -102,10 +102,11 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 	)
 	rrsetTable := table.New(
 		table.WithColumns([]table.Column{
-			{Title: "Name", Width: 30},
-			{Title: "TTL", Width: 8},
-			{Title: "Type", Width: 8},
-			{Title: "Content", Width: 54},
+			{Title: "Name", Width: 50},
+			{Title: "TTL", Width: 10},
+			{Title: "Type", Width: 10},
+			{Title: "Proxied", Width: 10},
+			{Title: "Content", Width: 70},
 		}),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(false),
