@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -62,6 +61,8 @@ var _ tea.Model = (*Model)(nil)
 type (
 	switchTableToRRSetCmd string
 	dataLoadedMsg         struct{}
+	dataLoadingMsg        struct{}
+	updateRRSetMsg        struct{}
 )
 
 // Model represents model for implements bubbletea.Model interface
@@ -114,33 +115,37 @@ func NewModel() *Model {
 }
 
 // This command will be executed immediately when the program starts.
+// Implements tea.Model interface.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, func() tea.Msg {
-		a, _ := app.New()
-		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-		defer cancel()
+	return tea.Batch(
+		m.spinner.Tick, // Start the spinner
+		func() tea.Msg {
+			a, _ := app.New()
+			ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+			defer cancel()
 
-		var wg sync.WaitGroup
+			zones, _ := a.Zones().List(ctx)
+			rows := []table.Row{}
+			cmds := []tea.Cmd{} // Commands list for async updating
 
-		zones, _ := a.Zones().List(ctx)
-		rows := []table.Row{}
-		for _, zone := range zones {
-			rows = append(rows, table.Row{
-				zone.Name,
-				strings.Join(zone.NameServers, ", "),
-			})
-			wg.Add(1)
-			go m.updateRRSet(&wg, zone.Name)
-		}
-		m.ZonesTable.SetRows(rows)
-		m.current = &m.ZonesTable
+			for _, zone := range zones {
+				rows = append(rows, table.Row{
+					zone.Name,
+					strings.Join(zone.NameServers, ", "),
+				})
+				cmds = append(cmds, m.updateRRSet(zone.Name))
+			}
+			m.ZonesTable.SetRows(rows)
+			m.current = &m.ZonesTable
 
-		wg.Wait()
-
-		return dataLoadedMsg{}
-	})
+			// Return the command that runs all async updates
+			return tea.Batch(cmds...)()
+		})
 }
 
+// View renders the program's UI, which is just a string. The view is
+// rendered after every Update.
+// Implements tea.Model interface.
 func (m *Model) View() string {
 	table := m.viewZones()
 	if m.RRSetTable.Focused() {
@@ -160,7 +165,10 @@ func (m *Model) View() string {
 
 // Takes a tea.Msg as input and uses a type switch to handle different types of messages.
 // Each case in the switch statement corresponds to a specific message type.
+// Implements tea.Model interface.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	// message is sent when the window size changes
 	// save to reflect the new dimensions of the terminal window.
@@ -177,11 +185,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Moves the focus up in the process table if the table is focused.
 		case "up", "k":
 			m.current.MoveUp(1)
-			return m, m.spinner.Tick
 		// Moves the focus down in the process table if the table is focused.
 		case "down", "j":
 			m.current.MoveDown(1)
-			return m, m.spinner.Tick
+		// Reload RRSet
+		case "r":
+			return m, func() tea.Msg { return dataLoadingMsg{} }
 		// Quits the program by returning the tea.Quit command.
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -190,26 +199,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter, tea.KeySpace:
 			return m, m.handleEnter(msg)
 		}
-		if m.loading {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
+
+	case spinner.TickMsg:
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	// Custom messages
+	case dataLoadingMsg:
+		m.loading = true
+		return m, func() tea.Msg { return updateRRSetMsg{} }
+
+	case updateRRSetMsg:
+		zone := m.ZonesTable.SelectedRow()
+		return m, m.updateRRSet(zone[0])
 
 	case dataLoadedMsg:
 		m.loading = false
+		return m, nil // stop spinner
 
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-	// Custom messages
 	case switchTableToRRSetCmd:
 		m.switchTable(rrsetTable)
 	}
 
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+	}
+
 	// If the message type does not match any of the handled cases, the model is returned unchanged, and no new command is issued.
-	return m, nil
+	return m, cmd
 }
 
 func (m *Model) viewHeader() string {
@@ -232,6 +249,7 @@ func (m *Model) viewMenu() string {
 		"[↑/↓/←/→] Navigate",
 		"[Enter] Edit",
 		"[Esc] Exit edit",
+		"[r] Reload",
 		"[q] Quit",
 	}
 
@@ -239,7 +257,6 @@ func (m *Model) viewMenu() string {
 }
 
 func (m *Model) viewStatusBar() string {
-	// return fmt.Sprintf("%s%s%s", m.spinner.View(), " ", "Spinning...")
 	statusStyle := lipgloss.NewStyle().
 		Foreground(Color.Secondary).
 		Padding(0, 1).
@@ -301,15 +318,18 @@ func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 }
 
 // updateRRSet updates resource records set by given zone name.
-func (m *Model) updateRRSet(wg *sync.WaitGroup, zone string) {
-	defer wg.Done()
+func (m *Model) updateRRSet(zone string) tea.Cmd {
+	return func() tea.Msg {
+		a, _ := app.New()
+		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+		defer cancel()
 
-	a, _ := app.New()
-	ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-	defer cancel()
+		rrset, _ := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
+		m.rrsetCache[zone] = rrset
 
-	rrset, _ := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
-	m.rrsetCache[zone] = rrset
+		// Return message that data is loaded.
+		return dataLoadedMsg{}
+	}
 }
 
 // switchTable switches focus between zones and rrset tables
