@@ -39,7 +39,7 @@ var (
 	content       string
 	debug         bool
 	name          string
-	outputType    string
+	outputFormat  string
 	proxied       bool
 	rrtype        string
 	ttl           int
@@ -77,7 +77,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
 	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 5*time.Second, "client timeout")
-	rootCmd.PersistentFlags().StringVarP(&outputType, "output-type", "o", "text", "print output in format: text/json")
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output-format", "o", "text", "print output in format: text/json/none")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "turn on debug output to STDERR")
 
 	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
