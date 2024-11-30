@@ -17,10 +17,12 @@ limitations under the License.
 package app
 
 import (
+	"github.com/mixanemca/cfdnscli/internal/prettyprint"
 	"github.com/mixanemca/cfdnscli/internal/zones"
 )
 
 type App interface {
 	// Zones returns a specialized API for interacting with zones.
 	Zones() zones.Client
+	Printer() prettyprint.PrettyPrinter
 }
