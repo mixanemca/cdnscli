@@ -42,7 +42,9 @@ func init() {
 }
 
 func zoneListRun(cmd *cobra.Command, args []string) {
-	a, err := app.New()
+	a, err := app.New(
+		app.WithOutputFormat(outputFormat),
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -62,5 +64,5 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%#v\n", zones)
+	a.Printer().ZonesList(zones)
 }
