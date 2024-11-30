@@ -30,7 +30,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mixanemca/cfdnscli/internal/app"
 	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cfdnscli/internal/ui/popup"
 	"github.com/mixanemca/cfdnscli/internal/ui/theme"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 const (
@@ -67,6 +69,16 @@ type (
 	updateRRSetMsg        struct{}
 )
 
+// Messages to control the popup window
+type editRowMsg struct {
+	row table.Row
+}
+
+type (
+	saveRowMsg    struct{}
+	cancelEditMsg struct{}
+)
+
 // Model represents model for implements bubbletea.Model interface.
 type Model struct {
 	width      int
@@ -75,6 +87,14 @@ type Model struct {
 	loading    bool
 	current    *table.Model
 	rrsetCache map[string][]models.DNSRecord
+
+    // editing
+    popup      *popup.Model
+	showPopup  bool
+	overlay    *overlay.Model
+	editRow    table.Row
+	editBuffer []string
+	cursor     int
 
 	ClientTimeout time.Duration
 
@@ -132,20 +152,22 @@ func (m *Model) Init() tea.Cmd {
 // rendered after every Update.
 // Implements tea.Model interface.
 func (m *Model) View() string {
-	table := m.viewZones()
+    table := m.viewZones()
 	if m.RRSetTable.Focused() {
 		m.current = &m.RRSetTable
 		table = m.viewRRSet()
 	}
 
-	return m.ViewStyle.Render(
-		lipgloss.JoinVertical(lipgloss.Left,
-			m.viewHeader(),
-			table,
-			m.viewStatusBar(),
-			m.viewMenu(),
-		),
-	)
+    if m.showPopup {
+        // Render popup window over the base scene using overlay
+        if m.overlay == nil {
+            bg := &backgroundViewModel{parent: m}
+            m.overlay = overlay.New(m.popup, bg, overlay.Center, overlay.Center, 0, 0)
+        }
+        return m.overlay.View()
+    }
+
+    return m.renderBase(table)
 }
 
 // Update Takes a tea.Msg as input and uses a type switch to handle different types of messages.
@@ -154,25 +176,62 @@ func (m *Model) View() string {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	if m.showPopup {
+        updated, cmd := m.popup.Update(msg)
+        if pm, ok := updated.(*popup.Model); ok {
+            m.popup = pm
+        }
+        if !m.popup.IsActive { // Close popup when it becomes inactive
+			m.showPopup = false
+			return m, cmd
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
-	// message is sent when the window size changes
-	// save to reflect the new dimensions of the terminal window.
+    // Window size changed: save to reflect new terminal dimensions
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
 		m.width = msg.Width
 
-	// message is sent when a key is pressed.
+    // Key pressed
 	case tea.KeyMsg:
 		switch msg.String() {
-		// Toggles the focus state of the process table
+        // Toggle focus between zones and records
 		case "esc":
+			if m.showPopup {
+				m.switchTable(rrsetTable)
+				return m, nil
+			}
 			m.switchTable(zonesTable)
-		// Moves the focus up in the process table if the table is focused.
+        // Move focus up in the current table
 		case "up", "k":
 			m.current.MoveUp(1)
-		// Moves the focus down in the process table if the table is focused.
+        // Move focus down in the current table
 		case "down", "j":
 			m.current.MoveDown(1)
+        // Open popup editor for the selected record
+		case "e":
+			if m.current.Cursor() >= 0 {
+				row := m.current.Rows()[m.current.Cursor()]
+                // Convert current Proxied value to boolean string
+				proxiedStr := "false"
+				if row[3] == checkMark {
+					proxiedStr = "true"
+				}
+				initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
+				m.showPopup = true
+                m.overlay = nil // recreate overlay on render
+				m.popup = popup.New(
+					[]string{"Name", "TTL", "Type", "Proxied", "Content"},
+					initial,
+					"Resource record editing",
+					func(fields []string) tea.Msg {
+						return popup.SaveActionMsg{Fields: fields}
+					},
+					popup.CancelMsg{},
+				)
+			}
 		// Reload RRSet
 		case "r":
 			return m, func() tea.Msg { return dataLoadingMsg{} }
@@ -189,7 +248,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	// Custom messages
+    // Custom messages
 	case dataLoadingMsg:
 		m.loading = true
 		return m, func() tea.Msg { return updateRRSetMsg{} }
@@ -204,13 +263,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case switchTableToRRSetCmd:
 		m.switchTable(rrsetTable)
+
+    case editRowMsg:
+        // Open editing window
+		m.showPopup = true
+		m.editRow = msg.row
+		m.editBuffer = append([]string{}, msg.row...)
+		m.cursor = 0
+		return m, nil
+
+	case saveRowMsg:
+        // Save changes
+		copy(m.editRow, m.editBuffer)
+		m.showPopup = false
+		return m, nil
+
+	case cancelEditMsg:
+        // Cancel editing
+		m.showPopup = false
+		return m, nil
+    // Handle save and cancel messages from popup
+	case popup.SaveActionMsg:
+        // Save changes to the table and perform UpdateRR
+		m.updateTableRow(m.current.Cursor(), msg.Fields)
+		return m, m.updateRRFromFields(msg.Fields)
+	case popup.CancelMsg:
+        // Cancel without persisting changes
+		m.popup.IsActive = false
 	}
 
 	if m.loading {
 		m.spinner, cmd = m.spinner.Update(msg)
 	}
 
-	// If the message type does not match any of the handled cases, the model is returned unchanged, and no new command is issued.
+    // If the message type does not match any of the handled cases, return unchanged with no command
 	return m, cmd
 }
 
@@ -224,7 +310,6 @@ func (m *Model) viewHeader() string {
 }
 
 func (m *Model) viewMenu() string {
-	// return fmt.Sprintf("Press Enter to select, Esc to return, arrow keys to move, / to find, Ctrl+C or q to exit\n")
 	menuStyle := lipgloss.NewStyle().
 		Padding(0, 1).
 		Width(m.width).
@@ -235,6 +320,7 @@ func (m *Model) viewMenu() string {
 		"[Enter] Edit",
 		"[Esc] Exit edit",
 		"[r] Reload",
+		"[e] Edit",
 		"[q] Quit",
 	}
 
@@ -249,7 +335,7 @@ func (m *Model) viewStatusBar() string {
 		Height(statusHeight)
 
 	if m.loading {
-		return statusStyle.Render(fmt.Sprintf("Loading... %s", m.spinner.View()))
+		return statusStyle.Render(fmt.Sprintf("Loading %s", m.spinner.View()))
 	}
 	rows := len(m.RRSetTable.Rows())
 	table := tableStatusRecords
@@ -302,7 +388,7 @@ func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 	}
 }
 
-// updateRRSet updates resource records set by given zone ID.
+// updateRRSet updates resource records set for the given zone name.
 func (m *Model) updateRRSet(zone string) tea.Cmd {
 	return func() tea.Msg {
 		a, _ := app.New()
@@ -314,12 +400,12 @@ func (m *Model) updateRRSet(zone string) tea.Cmd {
 		})
 		m.rrsetCache[zone] = rrset
 
-		// Return message that data is loaded.
+        // Return a message to indicate that data has been loaded
 		return dataLoadedMsg{}
 	}
 }
 
-// switchTable switches focus between zones and rrset tables
+// switchTable switches focus between zones and records tables
 func (m *Model) switchTable(name string) {
 	switch name {
 	case zonesTable:
@@ -338,4 +424,104 @@ func boolToCheckMark(b bool) string {
 		return checkMark
 	}
 	return crossMark
+}
+
+func (m *Model) updateTableRow(index int, newRow table.Row) {
+	var rrset []models.DNSRecord
+
+	rows := m.current.Rows()
+	if index >= 0 && index < len(rows) {
+        rows[index] = newRow
+		m.current.SetRows(rows) // Переназначаем строки таблице
+		// cache update
+		selectedRow := m.ZonesTable.SelectedRow()
+		if len(selectedRow) > 0 {
+			if _, ok := m.rrsetCache[selectedRow[0]]; ok {
+				rrset = m.rrsetCache[selectedRow[0]]
+			}
+            for i := range rrset {
+                if rrset[i].Name == newRow[0] {
+                    rrset[i].TTL, _ = strconv.Atoi(newRow[1])
+                    rrset[i].Type = newRow[2]
+                    // newRow[3] is "true"/"false"; convert to bool
+                    rrset[i].Proxied = strings.ToLower(newRow[3]) == "true"
+                    rrset[i].Content = newRow[4]
+                    break
+                }
+            }
+			m.rrsetCache[selectedRow[0]] = rrset
+		}
+	}
+}
+
+// renderBase renders base UI without overlays
+func (m *Model) renderBase(table string) string {
+    return m.ViewStyle.Render(
+        lipgloss.JoinVertical(lipgloss.Left,
+            m.viewHeader(),
+            table,
+            m.viewStatusBar(),
+            m.viewMenu(),
+        ),
+    )
+}
+
+// backgroundViewModel adapts base view to tea.Model for overlay background
+type backgroundViewModel struct{ parent *Model }
+
+func (b *backgroundViewModel) Init() tea.Cmd                 { return nil }
+func (b *backgroundViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return b, nil }
+func (b *backgroundViewModel) View() string {
+    table := b.parent.viewZones()
+    if b.parent.RRSetTable.Focused() {
+        table = b.parent.viewRRSet()
+    }
+    return b.parent.renderBase(table)
+}
+
+// updateRRFromFields builds DNSRecord and performs UpdateRR via provider
+func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
+    return func() tea.Msg {
+        a, _ := app.New()
+        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+        defer cancel()
+
+        // Find selected zone and record by name
+        zoneRow := m.ZonesTable.SelectedRow()
+        if len(zoneRow) == 0 {
+            return nil
+        }
+        zoneName := zoneRow[0]
+        var target models.DNSRecord
+        if rrset, ok := m.rrsetCache[zoneName]; ok {
+            for _, r := range rrset {
+                if r.Name == fields[0] {
+                    target = r
+                    break
+                }
+            }
+        }
+
+        ttl, _ := strconv.Atoi(fields[1])
+        proxied := strings.ToLower(fields[3]) == "true"
+
+        // Build updated record
+        target.Name = fields[0]
+        target.TTL = ttl
+        target.Type = fields[2]
+        target.Proxied = proxied
+        target.Content = fields[4]
+
+        // Perform update
+        if _, err := a.Provider().UpdateRR(ctx, zoneName, target); err != nil {
+            // keep UI responsive; could add error handling UI later
+            return nil
+        }
+
+        // Close popup
+        m.popup.IsActive = false
+        m.showPopup = false
+        m.overlay = nil
+        return nil
+    }
 }
