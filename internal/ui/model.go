@@ -29,6 +29,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/app"
+	"github.com/mixanemca/cfdnscli/internal/ui/theme"
 )
 
 const (
@@ -240,7 +241,7 @@ func (m *Model) viewMenu() string {
 
 func (m *Model) viewStatusBar() string {
 	statusStyle := lipgloss.NewStyle().
-		Foreground(Color.Secondary).
+		Foreground(theme.Color.Secondary).
 		Padding(0, 1).
 		Width(m.width).
 		Height(statusHeight)
