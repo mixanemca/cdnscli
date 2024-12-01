@@ -26,6 +26,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mixanemca/cfdnscli/internal/ui"
+	"github.com/mixanemca/cfdnscli/internal/ui/theme"
 	"github.com/spf13/cobra"
 	"github.com/version-go/ldflags"
 
@@ -87,7 +88,7 @@ func init() {
 
 func rootCmdRun(cmd *cobra.Command, args []string) {
 	tableStyle := table.DefaultStyles()
-	tableStyle.Selected = lipgloss.NewStyle().Background(ui.Color.Highlight)
+	tableStyle.Selected = lipgloss.NewStyle().Background(theme.Color.Highlight)
 
 	// Creates a new table with specified columns and initial empty rows.
 	zonesTable := table.New(
