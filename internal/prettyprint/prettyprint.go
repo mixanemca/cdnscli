@@ -18,15 +18,15 @@ package prettyprint
 
 const (
 	// FormatText format for human-readable output.
-	FormatText OutputFormat = "text"
+	FormatText OutputFormat = iota
 	// FormatJSON format for output in JSON.
-	FormatJSON OutputFormat = "json"
+	FormatJSON
 	// FormatNone format for discarding output.
-	FormatNone OutputFormat = "none"
+	FormatNone
 )
 
 // OutputFormat holds supported output formats.
-type OutputFormat string
+type OutputFormat uint
 
 // New constructs a new TextPrinter
 func New(output OutputFormat) PrettyPrinter {
