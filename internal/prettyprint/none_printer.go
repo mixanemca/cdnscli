@@ -23,3 +23,18 @@ type NonePrinter struct{}
 
 // ZonesList prints list of DNS zones.
 func (pp *NonePrinter) ZonesList(zones []cloudflare.Zone) {}
+
+// RecordsList prints list of DNS resource records.
+func (pp *NonePrinter) RecordsList(rrset []cloudflare.DNSRecord) {}
+
+// RecordInfo displays information about a specified DNS resource record.
+func (pp *NonePrinter) RecordInfo(rr cloudflare.DNSRecord) {}
+
+// RecordAdd displays information about a new DNS resource record.
+func (pp *NonePrinter) RecordAdd(rr cloudflare.DNSRecord) {}
+
+// RecordDel displays information about a deleted DNS recource record.
+func (pp *NonePrinter) RecordDel(rr cloudflare.DNSRecord) {}
+
+// RecordUpdate displays information about an updated DNS resource record.
+func (pp *NonePrinter) RecordUpdate(rr cloudflare.DNSRecord) {}

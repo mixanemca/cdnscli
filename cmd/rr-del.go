@@ -50,7 +50,9 @@ func init() {
 }
 
 func rrDelCmdRun(cmd *cobra.Command, args []string) {
-	a, err := app.New()
+	a, err := app.New(
+		app.WithOutputFormat(outputFormat),
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -79,5 +81,5 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("DNS resource record %s successfully deleted\n", rr.Name)
+	a.Printer().RecordDel(rr)
 }

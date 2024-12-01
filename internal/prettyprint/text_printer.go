@@ -37,3 +37,54 @@ func (pp *TextPrinter) ZonesList(zones []cloudflare.Zone) {
 	}
 	fmt.Print(fields.String())
 }
+
+// RecordsList prints list of DNS resource records.
+func (pp *TextPrinter) RecordsList(rrset []cloudflare.DNSRecord) {
+	var fields strings.Builder
+	for _, rr := range rrset {
+		fields.WriteString(fmt.Sprintf("ID: %s\n", rr.ID))
+		fields.WriteString(fmt.Sprintf("Name: %s\n", rr.Name))
+		fields.WriteString(fmt.Sprintf("TTL: %d\n", rr.TTL))
+		fields.WriteString(fmt.Sprintf("Type: %s\n", rr.Type))
+		fields.WriteString(fmt.Sprintf("Proxied: %t\n", cloudflare.Bool(rr.Proxied)))
+		fields.WriteString(fmt.Sprintf("Content: %s\n", rr.Content))
+	}
+	fmt.Print(fields.String())
+}
+
+// RecordInfo displays information about a specified DNS resource record.
+func (pp *TextPrinter) RecordInfo(rr cloudflare.DNSRecord) {
+	var fields strings.Builder
+
+	fields.WriteString(fmt.Sprintf("ID: %s\n", rr.ID))
+	fields.WriteString(fmt.Sprintf("Name: %s\n", rr.Name))
+	fields.WriteString(fmt.Sprintf("TTL: %d\n", rr.TTL))
+	fields.WriteString(fmt.Sprintf("Type: %s\n", rr.Type))
+	fields.WriteString(fmt.Sprintf("Proxied: %t\n", cloudflare.Bool(rr.Proxied)))
+	fields.WriteString(fmt.Sprintf("Content: %s\n", rr.Content))
+
+	fmt.Print(fields.String())
+
+}
+
+// RecordAdd displays information about a new DNS resource record.
+func (pp *TextPrinter) RecordAdd(rr cloudflare.DNSRecord) {
+	var fields strings.Builder
+
+	fields.WriteString(fmt.Sprintf("New resource record %q was been added with ID %q\n",
+		rr.Name,
+		rr.ID,
+	))
+
+	fmt.Print(fields.String())
+}
+
+// RecordDel displays information about a deleted DNS recource record.
+func (pp *TextPrinter) RecordDel(rr cloudflare.DNSRecord) {
+	fmt.Printf("DNS resource record %s successfully deleted\n", rr.Name)
+}
+
+// RecordUpdate displays information about an updated DNS resource record.
+func (pp *TextPrinter) RecordUpdate(rr cloudflare.DNSRecord) {
+	fmt.Printf("DNS resource record %s successfully updated\n", rr.Name)
+}

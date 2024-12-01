@@ -20,5 +20,16 @@ import "github.com/cloudflare/cloudflare-go"
 
 // PrettyPrinter interface for printing in various formats.
 type PrettyPrinter interface {
-	ZonesList(list []cloudflare.Zone)
+	// ZonesList prints list of DNS zones.
+	ZonesList(zones []cloudflare.Zone)
+	// RecordsList prints list of DNS resource records.
+	RecordsList(rrset []cloudflare.DNSRecord)
+	// RecordInfo displays information about a specified DNS resource record.
+	RecordInfo(rr cloudflare.DNSRecord)
+	// RecordAdd displays information about a new DNS resource record.
+	RecordAdd(rr cloudflare.DNSRecord)
+	// RecordDel displays information about a deleted DNS recource record.
+	RecordDel(rr cloudflare.DNSRecord)
+	// RecordUpdate displays information about an updated DNS resource record.
+	RecordUpdate(rr cloudflare.DNSRecord)
 }
