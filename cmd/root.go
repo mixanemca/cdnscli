@@ -25,27 +25,40 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	homedir "github.com/mitchellh/go-homedir"
 	"github.com/mixanemca/cfdnscli/internal/ui"
 	"github.com/mixanemca/cfdnscli/internal/ui/theme"
 	"github.com/spf13/cobra"
-	"github.com/version-go/ldflags"
-
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
+	"github.com/thediveo/enumflag/v2"
+	"github.com/version-go/ldflags"
+)
+
+const (
+	formatText = iota
+	formatJson
+	formatNone
 )
 
 var (
-	cfgFile       string
-	clientTimeout time.Duration
-	content       string
-	debug         bool
-	name          string
-	outputFormat  string
-	proxied       bool
-	rrtype        string
-	ttl           int
-	zone          string
+	cfgFile         string
+	clientTimeout   time.Duration
+	content         string
+	debug           bool
+	name            string
+	outputFormatInt int
+	outputFormat    string
+	proxied         bool
+	rrtype          string
+	ttl             int
+	zone            string
 )
+
+var outputFormatList = map[int][]string{
+	formatText: {"text"},
+	formatJson: {"json"},
+	formatNone: {"none"},
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -78,12 +91,25 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
 	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 5*time.Second, "client timeout")
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output-format", "o", "text", "print output in format: text/json/none")
+	rootCmd.PersistentFlags().VarP(
+		enumflag.New(&outputFormatInt, "output-format", outputFormatList, enumflag.EnumCaseSensitive),
+		"text", "o", "print output in format: text/json/none",
+	)
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "turn on debug output to STDERR")
 
 	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
-	viper.BindPFlag("output-type", rootCmd.PersistentFlags().Lookup("output-type"))
+	viper.BindPFlag("output-format", rootCmd.PersistentFlags().Lookup("output-format"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+
+	// convert outputFormat to text
+	switch outputFormatInt {
+	case 0:
+		outputFormat = "text"
+	case 1:
+		outputFormat = "json"
+	default:
+		outputFormat = "none"
+	}
 }
 
 func rootCmdRun(cmd *cobra.Command, args []string) {
