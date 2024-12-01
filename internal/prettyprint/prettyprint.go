@@ -39,7 +39,6 @@ func New(output OutputFormat) PrettyPrinter {
 		return &NonePrinter{}
 	}
 
-	// TODO: need to add validation of output-format flag
-	// or change to enum flags
-	return &TextPrinter{}
+	// This code should not be executed, but we’re keeping it just in case.
+	return &NonePrinter{}
 }
