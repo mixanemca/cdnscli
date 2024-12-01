@@ -44,7 +44,9 @@ func init() {
 }
 
 func rrListCmdRun(cmd *cobra.Command, args []string) {
-	a, err := app.New()
+	a, err := app.New(
+		app.WithOutputFormat(outputFormat),
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -59,5 +61,5 @@ func rrListCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Println(recs)
+	a.Printer().RecordsList(recs)
 }

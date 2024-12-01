@@ -28,6 +28,35 @@ type JSONPrinter struct{}
 
 // ZonesList prints list of DNS zones.
 func (pp *JSONPrinter) ZonesList(zones []cloudflare.Zone) {
-	j, _ := json.Marshal(zones)
-	fmt.Println(string(j))
+	fmt.Println(marshalJSON(zones))
+}
+
+// RecordsList prints list of DNS resource records.
+func (pp *JSONPrinter) RecordsList(rrset []cloudflare.DNSRecord) {
+	fmt.Println(marshalJSON(rrset))
+}
+
+// RecordInfo displays information about a specified DNS resource record.
+func (pp *JSONPrinter) RecordInfo(rr cloudflare.DNSRecord) {
+	fmt.Println(marshalJSON(rr))
+}
+
+// RecordAdd displays information about a new DNS resource record.
+func (pp *JSONPrinter) RecordAdd(rr cloudflare.DNSRecord) {
+	fmt.Println(marshalJSON(rr))
+}
+
+// RecordDel displays information about a deleted DNS recource record.
+func (pp *JSONPrinter) RecordDel(rr cloudflare.DNSRecord) {
+	fmt.Println(marshalJSON(rr))
+}
+
+// RecordUpdate displays information about an updated DNS resource record.
+func (pp *JSONPrinter) RecordUpdate(rr cloudflare.DNSRecord) {
+	fmt.Println(marshalJSON(rr))
+}
+
+func marshalJSON(v any) string {
+	j, _ := json.Marshal(v)
+	return string(j)
 }

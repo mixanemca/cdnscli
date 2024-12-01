@@ -53,7 +53,9 @@ func init() {
 }
 
 func rrAddCmdRun(cmd *cobra.Command, args []string) {
-	a, err := app.New()
+	a, err := app.New(
+		app.WithOutputFormat(outputFormat),
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -86,5 +88,5 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Println(rr)
+	a.Printer().RecordAdd(rr)
 }
