@@ -29,7 +29,7 @@ type app struct {
 	api    *cloudflare.API
 	zones  zones.Client
 	pp     pp.PrettyPrinter
-	output string
+	output pp.OutputFormat
 }
 
 // Option options for app
