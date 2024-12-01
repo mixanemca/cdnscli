@@ -16,8 +16,10 @@ limitations under the License.
 
 package app
 
+import "github.com/mixanemca/cfdnscli/internal/prettyprint"
+
 // WithOutputFormat sets an app's output format
-func WithOutputFormat(output string) Option {
+func WithOutputFormat(output prettyprint.OutputFormat) Option {
 	return func(a *app) error {
 		a.output = output
 		return nil
