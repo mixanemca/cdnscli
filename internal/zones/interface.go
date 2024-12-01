@@ -22,6 +22,7 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 )
 
+// Client exposes methods for manage DNS.
 type Client interface {
 	// AddRR creates a new DNS resource record for a given zone.
 	AddRR(ctx context.Context, zone string, params cloudflare.CreateDNSRecordParams) (cloudflare.DNSRecord, error)

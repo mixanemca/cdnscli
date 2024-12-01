@@ -21,6 +21,7 @@ import (
 	"github.com/mixanemca/cfdnscli/internal/zones"
 )
 
+// App its main application interface.
 type App interface {
 	// Zones returns a specialized API for interacting with zones.
 	Zones() zones.Client
