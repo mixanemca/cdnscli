@@ -14,6 +14,10 @@ MAKEFLAGS += --silent
 
 all: build
 
+## lint: Run linting.
+lint:
+	@golint ./...
+
 ## build: Build the binary.
 build: clean
 	@go build $(LDFLAGS) -o $(PROJECTNAME)
