@@ -6,11 +6,21 @@ Work with CloudFlare DNS easily from CLI!
 
 ## What is it?
 
-This utility will allow you to work with CloudFlare DNS from the CLI:
-- add, change and delete zones and resource records
-- get more information
-- search
-- export and import resource record sets
+`cfdnscli` is a powerful cross-platform utility for managing DNS records and zones in CloudFlare, written in Go.
+It provides convenient tools for both task automation and manual management through the terminal.
+
+The utility supports two modes of operation:
+
+- Classic CLI: Perfect for use in scripts, automation, and executing standalone commands.
+- TUI (Text User Interface): An interactive text-based interface for more convenient management.
+
+#### Key Features
+
+- Manage zones and resource records: add, modify, and delete them.
+- Retrieve detailed information about zones and records.
+- Search DNS records by various parameters.
+- Export and import resource record sets in a convenient format.
+- Easy-to-use interface, ideal for administrators and developers.
 
 ## Usage
 
@@ -55,7 +65,7 @@ make
 make install
 ```
 
-## Testing
+## Testing (WIP)
 
 ```bash
 make test
