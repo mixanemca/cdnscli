@@ -18,6 +18,7 @@ package zones
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/cloudflare/cloudflare-go"
@@ -34,9 +35,19 @@ type MockClient struct {
 func (m *MockClient) ListRecordsByZoneID(ctx context.Context, id string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error) {
 	recs, _, err := m.ListDNSRecords(ctx, cloudflare.ZoneIdentifier(id), params)
 	if err != nil {
-		return nil, err
+		return []cloudflare.DNSRecord{}, err
 	}
 	return recs, nil
+}
+
+// ListRecordsByZoneName returns a slice of DNS records for the given zone name and parameters.
+func (m *MockClient) ListRecordsByZoneName(ctx context.Context, zone string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error) {
+	id, err := m.ZoneIDByName(zone)
+	if err != nil {
+		return []cloudflare.DNSRecord{}, err
+	}
+
+	return m.ListRecordsByZoneID(ctx, id, params)
 }
 
 func (m *MockClient) GetDNSRecord(ctx context.Context, rc *cloudflare.ResourceContainer, recordID string) (cloudflare.DNSRecord, error) {
@@ -59,7 +70,8 @@ func (m *MockClient) UpdateDNSRecord(ctx context.Context, rc *cloudflare.Resourc
 	return cloudflare.DNSRecord{}, nil
 }
 func (m *MockClient) ZoneIDByName(zoneName string) (string, error) {
-	return "", nil
+	args := m.Called(zoneName)
+	return args.Get(0).(string), args.Error(1)
 }
 
 func TestListRecordsByZoneID(t *testing.T) {
@@ -98,7 +110,7 @@ func TestListRecordsByZoneID(t *testing.T) {
 			name:        "missing zone ID",
 			zone:        "noexists.com",
 			zoneID:      "",
-			mockResp:    nil,
+			mockResp:    []cloudflare.DNSRecord{},
 			wantErr:     true,
 			expectedErr: cloudflare.ErrMissingZoneID,
 		},
@@ -116,6 +128,112 @@ func TestListRecordsByZoneID(t *testing.T) {
 			client := New(mockClient)
 
 			result, err := client.ListRecordsByZoneID(ctx, tt.zoneID, cloudflare.ListDNSRecordsParams{
+				Name: tt.zone,
+			})
+
+			if tt.wantErr {
+				assert.EqualError(t, err, tt.expectedErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.mockResp, result)
+
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestListRecordsByZoneName(t *testing.T) {
+	tests := []struct {
+		name        string
+		zone        string
+		zoneID      string
+		mockResp    []cloudflare.DNSRecord
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name:   "successful retrieving set of DNS resource records",
+			zone:   "example.com",
+			zoneID: "12345",
+			mockResp: []cloudflare.DNSRecord{
+				{
+					Name:    "test.example.com",
+					Type:    "A",
+					Content: "192.0.2.1",
+					TTL:     3600,
+				},
+			},
+			wantErr:     false,
+			expectedErr: nil,
+		},
+		{
+			name:        "empty set of DNS resource records",
+			zone:        "empty.com",
+			zoneID:      "12345",
+			mockResp:    []cloudflare.DNSRecord{},
+			wantErr:     false,
+			expectedErr: nil,
+		},
+	}
+	testsErrors := []struct {
+		name        string
+		zone        string
+		zoneID      string
+		mockResp    []cloudflare.DNSRecord
+		wantErr     bool
+		expectedErr error
+	}{
+		{
+			name:        "missing zone name",
+			zone:        "",
+			zoneID:      "",
+			mockResp:    []cloudflare.DNSRecord{},
+			wantErr:     true,
+			expectedErr: errors.New("zone could not be found"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := new(MockClient)
+
+			mockClient.On("ListDNSRecords", mock.Anything, cloudflare.ZoneIdentifier(tt.zoneID), mock.Anything).
+				Return(tt.mockResp, &cloudflare.ResultInfo{}, tt.expectedErr)
+			mockClient.On("ZoneIDByName", tt.zone).
+				Return(tt.zoneID, tt.expectedErr)
+
+			ctx := context.Background()
+
+			client := New(mockClient)
+
+			result, err := client.ListRecordsByZoneName(ctx, tt.zone, cloudflare.ListDNSRecordsParams{
+				Name: tt.zone,
+			})
+
+			if tt.wantErr {
+				assert.EqualError(t, err, tt.expectedErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.mockResp, result)
+
+			mockClient.AssertExpectations(t)
+		})
+	}
+
+	for _, tt := range testsErrors {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := new(MockClient)
+
+			mockClient.On("ZoneIDByName", tt.zone).
+				Return(tt.zoneID, tt.expectedErr)
+
+			ctx := context.Background()
+
+			client := New(mockClient)
+
+			result, err := client.ListRecordsByZoneName(ctx, tt.zone, cloudflare.ListDNSRecordsParams{
 				Name: tt.zone,
 			})
 
