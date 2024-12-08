@@ -137,7 +137,7 @@ func (c *client) GetRRByName(ctx context.Context, zone, name string) (cloudflare
 func (c *client) List(ctx context.Context) ([]cloudflare.Zone, error) {
 	zones, err := c.api.ListZones(ctx)
 	if err != nil {
-		return nil, err
+		return []cloudflare.Zone{}, err
 	}
 
 	return zones, nil
@@ -147,7 +147,7 @@ func (c *client) List(ctx context.Context) ([]cloudflare.Zone, error) {
 func (c *client) ListByName(ctx context.Context, name string) ([]cloudflare.Zone, error) {
 	zones, err := c.api.ListZones(ctx, name)
 	if err != nil {
-		return nil, err
+		return []cloudflare.Zone{}, err
 	}
 
 	return zones, nil
@@ -158,7 +158,7 @@ func (c *client) ListRecordsByZoneID(ctx context.Context, id string, params clou
 	// Fetch all records for a zone
 	recs, _, err := c.api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(id), params)
 	if err != nil {
-		return nil, err
+		return []cloudflare.DNSRecord{}, err
 	}
 
 	return recs, nil
@@ -168,7 +168,7 @@ func (c *client) ListRecordsByZoneID(ctx context.Context, id string, params clou
 func (c *client) ListRecordsByZoneName(ctx context.Context, zone string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error) {
 	id, err := c.api.ZoneIDByName(zone)
 	if err != nil {
-		return nil, err
+		return []cloudflare.DNSRecord{}, err
 	}
 
 	return c.ListRecordsByZoneID(ctx, id, params)
