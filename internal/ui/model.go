@@ -28,7 +28,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/mixanemca/cfdnscli/app"
+	"github.com/mixanemca/cfdnscli/internal/app"
 	"github.com/mixanemca/cfdnscli/internal/ui/theme"
 )
 

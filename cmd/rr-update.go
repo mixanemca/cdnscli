@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mixanemca/cfdnscli/app"
+	"github.com/mixanemca/cfdnscli/internal/app"
 	"github.com/spf13/cobra"
 )
 
