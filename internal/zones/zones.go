@@ -153,7 +153,7 @@ func (c *client) ListByName(ctx context.Context, name string) ([]cloudflare.Zone
 	return zones, nil
 }
 
-// ListRecordsByZoneName returns a slice of DNS records for the given zone identifier and parameters.
+// ListRecordsByZoneID returns a slice of DNS records for the given zone identifier and parameters.
 func (c *client) ListRecordsByZoneID(ctx context.Context, id string, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, error) {
 	// Fetch all records for a zone
 	recs, _, err := c.api.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(id), params)

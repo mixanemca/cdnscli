@@ -16,15 +16,29 @@ limitations under the License.
 
 package zones
 
-import "github.com/cloudflare/cloudflare-go"
+import (
+	"context"
+
+	"github.com/cloudflare/cloudflare-go"
+)
 
 type client struct {
-	api *cloudflare.API
+	api Repo
 }
 
 // New creates a new Zones client
-func New(api *cloudflare.API) Client {
+func New(api Repo) Client {
 	return &client{
 		api: api,
 	}
+}
+
+type Repo interface {
+	GetDNSRecord(ctx context.Context, rc *cloudflare.ResourceContainer, recordID string) (cloudflare.DNSRecord, error)
+	CreateDNSRecord(ctx context.Context, rc *cloudflare.ResourceContainer, params cloudflare.CreateDNSRecordParams) (cloudflare.DNSRecord, error)
+	DeleteDNSRecord(ctx context.Context, rc *cloudflare.ResourceContainer, recordID string) error
+	ListDNSRecords(ctx context.Context, rc *cloudflare.ResourceContainer, params cloudflare.ListDNSRecordsParams) ([]cloudflare.DNSRecord, *cloudflare.ResultInfo, error)
+	ListZones(ctx context.Context, z ...string) ([]cloudflare.Zone, error)
+	UpdateDNSRecord(ctx context.Context, rc *cloudflare.ResourceContainer, params cloudflare.UpdateDNSRecordParams) (cloudflare.DNSRecord, error)
+	ZoneIDByName(zoneName string) (string, error)
 }
