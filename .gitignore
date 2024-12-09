@@ -1,3 +1,4 @@
 cfdnscli
 
 dist/
+coverage.out

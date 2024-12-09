@@ -18,8 +18,13 @@ all: build
 lint:
 	@golint ./...
 
+## test: Run tests.
+test: lint
+	@go test -v -coverprofile=coverage.out github.com/mixanemca/$(PROJECTNAME)/internal/providers
+	@go tool cover -func=coverage.out
+
 ## build: Build the binary.
-build: clean
+build: clean test
 	@go build $(LDFLAGS) -o $(PROJECTNAME)
 
 ## clean: Cleanup.
