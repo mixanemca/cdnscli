@@ -16,25 +16,27 @@ limitations under the License.
 
 package prettyprint
 
-import "github.com/cloudflare/cloudflare-go"
+import (
+	"github.com/mixanemca/cfdnscli/internal/models"
+)
 
 // NonePrinter don't print enythings. Use for scripts when output not needed.
 type NonePrinter struct{}
 
 // ZonesList prints list of DNS zones.
-func (pp *NonePrinter) ZonesList(zones []cloudflare.Zone) {}
+func (pp *NonePrinter) ZonesList(zones []models.Zone) {}
 
 // RecordsList prints list of DNS resource records.
-func (pp *NonePrinter) RecordsList(rrset []cloudflare.DNSRecord) {}
+func (pp *NonePrinter) RecordsList(rrset []models.DNSRecord) {}
 
 // RecordInfo displays information about a specified DNS resource record.
-func (pp *NonePrinter) RecordInfo(rr cloudflare.DNSRecord) {}
+func (pp *NonePrinter) RecordInfo(rr models.DNSRecord) {}
 
 // RecordAdd displays information about a new DNS resource record.
-func (pp *NonePrinter) RecordAdd(rr cloudflare.DNSRecord) {}
+func (pp *NonePrinter) RecordAdd(rr models.DNSRecord) {}
 
 // RecordDel displays information about a deleted DNS recource record.
-func (pp *NonePrinter) RecordDel(rr cloudflare.DNSRecord) {}
+func (pp *NonePrinter) RecordDel(rr models.DNSRecord) {}
 
 // RecordUpdate displays information about an updated DNS resource record.
-func (pp *NonePrinter) RecordUpdate(rr cloudflare.DNSRecord) {}
+func (pp *NonePrinter) RecordUpdate(rr models.DNSRecord) {}

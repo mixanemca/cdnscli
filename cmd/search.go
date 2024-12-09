@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cfdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -67,10 +67,11 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 		name = strings.Join([]string{name, zone}, ".")
 	}
 
-	results, err := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{
-		Content: content,
-		Name:    name,
-		Type:    rrtype,
+	results, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+		Content:  content,
+		Name:     name,
+		Type:     rrtype,
+		ZoneName: zone,
 	})
 	if err != nil {
 		fmt.Println(err)

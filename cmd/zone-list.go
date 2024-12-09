@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cfdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -53,11 +53,11 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	var zones []cloudflare.Zone
+	var zones []models.Zone
 	if len(name) > 0 {
-		zones, err = a.Zones().ListByName(ctx, name)
+		zones, err = a.Provider().ListZonesByName(ctx, name)
 	} else {
-		zones, err = a.Zones().List(ctx)
+		zones, err = a.Provider().ListZones(ctx)
 	}
 	if err != nil {
 		fmt.Println(err)

@@ -14,17 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package app
+package models
 
-import (
-	"github.com/mixanemca/cfdnscli/internal/prettyprint"
-	"github.com/mixanemca/cfdnscli/internal/providers"
-)
-
-// App its main application interface.
-type App interface {
-	// Provider returns a specialized API for interacting with providers.
-	Provider() providers.Provider
-	// Printter returns a specialized API for pretty printing.
-	Printer() prettyprint.PrettyPrinter
+// Zone describes a DNS zone.
+type Zone struct {
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	NameServers []string `json:"name_servers,omitempty"`
+	Status      string   `json:"status,omitempty"`
 }

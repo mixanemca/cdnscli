@@ -22,14 +22,13 @@ import (
 
 	"github.com/cloudflare/cloudflare-go"
 	pp "github.com/mixanemca/cfdnscli/internal/prettyprint"
-	"github.com/mixanemca/cfdnscli/internal/zones"
+	"github.com/mixanemca/cfdnscli/internal/providers"
 )
 
 type app struct {
-	api    *cloudflare.API
-	zones  zones.Client
-	pp     pp.PrettyPrinter
-	output pp.OutputFormat
+	provider providers.Provider
+	pp       pp.PrettyPrinter
+	output   pp.OutputFormat
 }
 
 // Option options for app
@@ -59,17 +58,19 @@ func New(opts ...Option) (App, error) {
 		return nil, err
 	}
 
-	a.api = api
+	// a.api = api
 
-	a.zones = zones.New(a.api)
+	repo := providers.NewRepoCloudFlare(api)
+
+	a.provider = providers.NewProvider(repo)
 
 	a.pp = pp.New(pp.OutputFormat(a.output))
 
 	return a, nil
 }
 
-func (a *app) Zones() zones.Client {
-	return a.zones
+func (a *app) Provider() providers.Provider {
+	return a.provider
 }
 
 func (a *app) Printer() pp.PrettyPrinter {

@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cfdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -55,7 +55,9 @@ func rrListCmdRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	recs, err := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
+	recs, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+		ZoneName: zone,
+	})
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
