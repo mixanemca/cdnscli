@@ -27,8 +27,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cfdnscli/internal/models"
 	"github.com/mixanemca/cfdnscli/internal/ui/theme"
 )
 
@@ -73,7 +73,7 @@ type Model struct {
 	spinner    spinner.Model
 	loading    bool
 	current    *table.Model
-	rrsetCache map[string][]cloudflare.DNSRecord
+	rrsetCache map[string][]models.DNSRecord
 
 	ClientTimeout time.Duration
 
@@ -86,7 +86,7 @@ type Model struct {
 func NewModel() *Model {
 	var m Model
 
-	m.rrsetCache = make(map[string][]cloudflare.DNSRecord)
+	m.rrsetCache = make(map[string][]models.DNSRecord)
 	m.ViewStyle = lipgloss.NewStyle().
 		Padding(0, 0).
 		Width(m.width)
@@ -107,7 +107,7 @@ func (m *Model) Init() tea.Cmd {
 			ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 			defer cancel()
 
-			zones, _ := a.Zones().List(ctx)
+			zones, _ := a.Provider().ListZones(ctx)
 			rows := []table.Row{}
 			cmds := []tea.Cmd{} // Commands list for async updating
 
@@ -270,7 +270,7 @@ func (m *Model) viewZones() string {
 }
 
 func (m *Model) viewRRSet() string {
-	var rrset []cloudflare.DNSRecord
+	var rrset []models.DNSRecord
 
 	selectedRow := m.ZonesTable.SelectedRow()
 	if len(selectedRow) > 0 {
@@ -285,7 +285,7 @@ func (m *Model) viewRRSet() string {
 			rr.Name,
 			strconv.Itoa(rr.TTL),
 			rr.Type,
-			boolToCheckMark(cloudflare.Bool(rr.Proxied)),
+			boolToCheckMark(rr.Proxied),
 			rr.Content,
 		})
 	}
@@ -300,14 +300,16 @@ func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 	}
 }
 
-// updateRRSet updates resource records set by given zone name.
+// updateRRSet updates resource records set by given zone ID.
 func (m *Model) updateRRSet(zone string) tea.Cmd {
 	return func() tea.Msg {
 		a, _ := app.New()
 		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 		defer cancel()
 
-		rrset, _ := a.Zones().ListRecordsByZoneName(ctx, zone, cloudflare.ListDNSRecordsParams{})
+		rrset, _ := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+			ZoneName: zone,
+		})
 		m.rrsetCache[zone] = rrset
 
 		// Return message that data is loaded.

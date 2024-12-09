@@ -16,20 +16,22 @@ limitations under the License.
 
 package prettyprint
 
-import "github.com/cloudflare/cloudflare-go"
+import (
+	"github.com/mixanemca/cfdnscli/internal/models"
+)
 
 // PrettyPrinter interface for printing in various formats.
 type PrettyPrinter interface {
 	// ZonesList prints list of DNS zones.
-	ZonesList(zones []cloudflare.Zone)
+	ZonesList(zones []models.Zone)
 	// RecordsList prints list of DNS resource records.
-	RecordsList(rrset []cloudflare.DNSRecord)
+	RecordsList(rrset []models.DNSRecord)
 	// RecordInfo displays information about a specified DNS resource record.
-	RecordInfo(rr cloudflare.DNSRecord)
+	RecordInfo(rr models.DNSRecord)
 	// RecordAdd displays information about a new DNS resource record.
-	RecordAdd(rr cloudflare.DNSRecord)
+	RecordAdd(rr models.DNSRecord)
 	// RecordDel displays information about a deleted DNS recource record.
-	RecordDel(rr cloudflare.DNSRecord)
+	RecordDel(rr models.DNSRecord)
 	// RecordUpdate displays information about an updated DNS resource record.
-	RecordUpdate(rr cloudflare.DNSRecord)
+	RecordUpdate(rr models.DNSRecord)
 }

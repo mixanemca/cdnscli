@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cfdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -71,18 +71,19 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 
 	rrtype = strings.ToUpper(rrtype)
 
-	params := cloudflare.CreateDNSRecordParams{
-		Content: content,
-		Name:    name,
-		Proxied: cloudflare.BoolPtr(proxied),
-		TTL:     ttl,
-		Type:    rrtype,
+	params := models.CreateDNSRecordParams{
+		Content:  content,
+		Name:     name,
+		Proxied:  proxied,
+		TTL:      ttl,
+		Type:     rrtype,
+		ZoneName: zone,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
 	defer cancel()
 
-	rr, err := a.Zones().AddRR(ctx, zone, params)
+	rr, err := a.Provider().AddRR(ctx, zone, params)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
