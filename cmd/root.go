@@ -25,7 +25,6 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	homedir "github.com/mitchellh/go-homedir"
 	pp "github.com/mixanemca/cfdnscli/internal/prettyprint"
 	"github.com/mixanemca/cfdnscli/internal/ui"
 	"github.com/mixanemca/cfdnscli/internal/ui/theme"
@@ -86,7 +85,7 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
-	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 5*time.Second, "client timeout")
+	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 10*time.Second, "client timeout")
 	rootCmd.PersistentFlags().VarP(
 		enumflag.New(&outputFormat, "output-format", outputFormatList, enumflag.EnumCaseSensitive),
 		"output-format", "o", "print output in format: text/json/none",
@@ -110,7 +109,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 		}),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),
-		table.WithHeight(50),
+		table.WithHeight(35),
 		table.WithStyles(tableStyle),
 	)
 	rrsetTable := table.New(
@@ -123,7 +122,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 		}),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(false),
-		table.WithHeight(50),
+		table.WithHeight(35),
 		table.WithStyles(tableStyle),
 	)
 
@@ -142,6 +141,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 	}
 }
 
+/*
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	if cfgFile != "" {
@@ -168,3 +168,4 @@ func initConfig() {
 		os.Exit(1)
 	}
 }
+*/
