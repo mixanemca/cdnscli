@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/mixanemca/cfdnscli/internal/app"
@@ -39,15 +40,23 @@ func init() {
 	rrCmd.AddCommand(rrUpdateCmd)
 
 	rrUpdateCmd.PersistentFlags().StringVarP(&content, "content", "c", "", "Comma separated IP address or domain name")
-	rrUpdateCmd.MarkPersistentFlagRequired("content")
+	if err := rrUpdateCmd.MarkPersistentFlagRequired("content"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "content", err)
+	}
 	rrUpdateCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "recource record name")
-	rrUpdateCmd.MarkPersistentFlagRequired("name")
+	if err := rrUpdateCmd.MarkPersistentFlagRequired("name"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "name", err)
+	}
 	// rrUpdateCmd.PersistentFlags().BoolVarP(&proxied, "proxied", "p", false, "Whether the record is receiving the performance and security benefits of Cloudflare")
 	rrUpdateCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "Type of the resource record (A, CNAME)")
-	rrUpdateCmd.MarkPersistentFlagRequired("type")
+	if err := rrUpdateCmd.MarkPersistentFlagRequired("type"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "type", err)
+	}
 	// rrUpdateCmd.PersistentFlags().IntVarP(&ttl, "ttl", "l", 1800, "The time to live of the resource record in seconds")
 	rrUpdateCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "zone name")
-	rrUpdateCmd.MarkPersistentFlagRequired("zone")
+	if err := rrUpdateCmd.MarkPersistentFlagRequired("zone"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "zone", err)
+	}
 }
 
 func rrUpdateCmdRun(cmd *cobra.Command, args []string) {

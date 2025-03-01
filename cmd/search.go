@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -43,7 +44,9 @@ func init() {
 	// searchCmd.PersistentFlags().IntVarP(&max, "max", "m", 10, "maximum number of entries to return")
 	searchCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "type of resorce record to search for")
 	searchCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "the zone name")
-	searchCmd.MarkPersistentFlagRequired("zone")
+	if err := searchCmd.MarkPersistentFlagRequired("zone"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "zone", err)
+	}
 }
 
 func searchCmdRun(cmd *cobra.Command, args []string) {
