@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -41,15 +42,23 @@ func init() {
 	rrCmd.AddCommand(rrAddCmd)
 
 	rrAddCmd.PersistentFlags().StringVarP(&content, "content", "c", "", "Comma separated IP address or domain name")
-	rrAddCmd.MarkPersistentFlagRequired("content")
+	if err := rrAddCmd.MarkPersistentFlagRequired("content"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "content", err)
+	}
 	rrAddCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "Zone name")
-	rrAddCmd.MarkPersistentFlagRequired("zone")
+	if err := rrAddCmd.MarkPersistentFlagRequired("zone"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "zone", err)
+	}
 	rrAddCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "Resource record name")
-	rrAddCmd.MarkPersistentFlagRequired("name")
+	if err := rrAddCmd.MarkPersistentFlagRequired("name"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "name", err)
+	}
 	rrAddCmd.PersistentFlags().BoolVarP(&proxied, "proxied", "p", false, "Whether the record is receiving the performance and security benefits of Cloudflare")
 	rrAddCmd.PersistentFlags().IntVarP(&ttl, "ttl", "l", 1800, "The time to live of the resource record in seconds")
 	rrAddCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "Type of the resource record (A, CNAME)")
-	rrAddCmd.MarkPersistentFlagRequired("type")
+	if err := rrAddCmd.MarkPersistentFlagRequired("type"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "type", err)
+	}
 }
 
 func rrAddCmdRun(cmd *cobra.Command, args []string) {

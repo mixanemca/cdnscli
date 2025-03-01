@@ -16,7 +16,7 @@ all: build
 
 ## lint: Run linting.
 lint:
-	@golint ./...
+	@golangci-lint run ./...
 
 ## test: Run tests.
 test: lint

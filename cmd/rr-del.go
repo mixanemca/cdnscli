@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -40,13 +41,21 @@ func init() {
 	rrCmd.AddCommand(rrDelCmd)
 
 	rrDelCmd.PersistentFlags().StringVarP(&content, "content", "c", "", "Comma separated IP address or domain name")
-	rrDelCmd.MarkPersistentFlagRequired("content")
+	if err := rrDelCmd.MarkPersistentFlagRequired("content"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "content", err)
+	}
 	rrDelCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "Zone name")
-	rrDelCmd.MarkPersistentFlagRequired("zone")
+	if err := rrDelCmd.MarkPersistentFlagRequired("zone"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "zone", err)
+	}
 	rrDelCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "Resource record name")
-	rrDelCmd.MarkPersistentFlagRequired("name")
+	if err := rrDelCmd.MarkPersistentFlagRequired("name"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "name", err)
+	}
 	rrDelCmd.PersistentFlags().StringVarP(&rrtype, "type", "t", "", "Type of the resource record (A, CNAME)")
-	rrDelCmd.MarkPersistentFlagRequired("type")
+	if err := rrDelCmd.MarkPersistentFlagRequired("type"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "type", err)
+	}
 }
 
 func rrDelCmdRun(cmd *cobra.Command, args []string) {

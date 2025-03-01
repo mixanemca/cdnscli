@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/mixanemca/cfdnscli/internal/app"
@@ -40,7 +41,9 @@ func init() {
 	rrCmd.AddCommand(rrListCmd)
 
 	rrListCmd.PersistentFlags().StringVarP(&zone, "zone", "z", "", "zone name")
-	rrListCmd.MarkPersistentFlagRequired("zone")
+	if err := rrListCmd.MarkPersistentFlagRequired("zone"); err != nil {
+		log.Fatalf("Failed to mark persistent flag %q as a required: %v", "zone", err)
+	}
 }
 
 func rrListCmdRun(cmd *cobra.Command, args []string) {

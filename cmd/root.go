@@ -92,9 +92,15 @@ func init() {
 	)
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "turn on debug output to STDERR")
 
-	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
-	viper.BindPFlag("output-format", rootCmd.PersistentFlags().Lookup("output-format"))
-	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	if err := viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout")); err != nil {
+		log.Fatalf("Failed bind flag %q: %v", "timeout", err)
+	}
+	if err := viper.BindPFlag("output-format", rootCmd.PersistentFlags().Lookup("output-format")); err != nil {
+		log.Fatalf("Failed bind flag %q: %v", "output-format", err)
+	}
+	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+		log.Fatalf("Failed bind flag %q: %v", "debug", err)
+	}
 }
 
 func rootCmdRun(cmd *cobra.Command, args []string) {
