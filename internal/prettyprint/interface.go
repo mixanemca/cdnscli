@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package prettyprint holds pretty printer for internal models.
 package prettyprint
 
 import (

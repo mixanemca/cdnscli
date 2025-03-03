@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package providers holds DNS providers and interface for works with its.
 package providers
 
 import (

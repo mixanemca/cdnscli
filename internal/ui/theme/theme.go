@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package theme holds the bubble tea UI settings.
 package theme
 
 import "github.com/charmbracelet/lipgloss"
 
+// Theme represents UI colors.
 type Theme struct {
 	Primary   lipgloss.AdaptiveColor
 	Secondary lipgloss.AdaptiveColor
@@ -27,6 +29,7 @@ type Theme struct {
 	Red       lipgloss.AdaptiveColor
 }
 
+// Color holds UI theme colors.
 var Color = Theme{
 	Primary:   lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
 	Secondary: lipgloss.AdaptiveColor{Light: "#969B86", Dark: "#696969"},

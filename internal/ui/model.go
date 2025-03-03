@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package ui holds cfdnscli UI.
 package ui
 
 import (
@@ -66,7 +67,7 @@ type (
 	updateRRSetMsg        struct{}
 )
 
-// Model represents model for implements bubbletea.Model interface
+// Model represents model for implements bubbletea.Model interface.
 type Model struct {
 	width      int
 	height     int
@@ -83,6 +84,7 @@ type Model struct {
 	ViewStyle  lipgloss.Style
 }
 
+// NewModel creates new Model for UI.
 func NewModel() *Model {
 	var m Model
 
@@ -97,7 +99,7 @@ func NewModel() *Model {
 	return &m
 }
 
-// This command will be executed immediately when the program starts.
+// Init This command will be executed immediately when the program starts.
 // Implements tea.Model interface.
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
@@ -146,7 +148,7 @@ func (m *Model) View() string {
 	)
 }
 
-// Takes a tea.Msg as input and uses a type switch to handle different types of messages.
+// Update Takes a tea.Msg as input and uses a type switch to handle different types of messages.
 // Each case in the switch statement corresponds to a specific message type.
 // Implements tea.Model interface.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
