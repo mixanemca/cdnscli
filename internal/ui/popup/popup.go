@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package popup holds cfdnscli UI elements for editing.
 package popup
 
 import (
@@ -35,7 +36,6 @@ type SaveActionMsg struct {
 
 // CancelMsg is a tea.Msg signaling that editing was canceled.
 type CancelMsg struct{}
-
 // Model implements tea.Model and represents the popup editor state.
 type Model struct {
 	ColumnNames []string               // Названия столбцов
@@ -218,6 +218,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         }
         return m, nil
     }
+    
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -274,7 +275,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m *Model) View() string {
-    
 	if !m.IsActive {
 		return ""
 	}
