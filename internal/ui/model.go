@@ -212,25 +212,49 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.current.MoveDown(1)
         // Open popup editor for the selected record
 		case "e":
-			if m.current.Cursor() >= 0 {
-				row := m.current.Rows()[m.current.Cursor()]
-                // Convert current Proxied value to boolean string
-				proxiedStr := "false"
-				if row[3] == checkMark {
-					proxiedStr = "true"
+			// If RRSet is focused, open record editor; if Zones is focused, show NameServers popup
+			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
+				rows := m.current.Rows()
+				cursor := m.current.Cursor()
+				if cursor < len(rows) {
+					row := rows[cursor]
+					if len(row) >= 5 { // Name, TTL, Type, Proxied, Content
+						// Convert current Proxied value to boolean string
+						proxiedStr := "false"
+						if row[3] == checkMark {
+							proxiedStr = "true"
+						}
+						initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
+						m.showPopup = true
+						m.overlay = nil // recreate overlay on render
+						m.popup = popup.New(
+							[]string{"Name", "TTL", "Type", "Proxied", "Content"},
+							initial,
+							"Resource record editing",
+							func(fields []string) tea.Msg {
+								return popup.SaveActionMsg{Fields: fields}
+							},
+							popup.CancelMsg{},
+						)
+					}
 				}
-				initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
-				m.showPopup = true
-                m.overlay = nil // recreate overlay on render
-				m.popup = popup.New(
-					[]string{"Name", "TTL", "Type", "Proxied", "Content"},
-					initial,
-					"Resource record editing",
-					func(fields []string) tea.Msg {
-						return popup.SaveActionMsg{Fields: fields}
-					},
-					popup.CancelMsg{},
-				)
+			} else if m.ZonesTable.Focused() && m.ZonesTable.Cursor() >= 0 {
+				rows := m.ZonesTable.Rows()
+				cursor := m.ZonesTable.Cursor()
+				if cursor < len(rows) {
+					row := rows[cursor]
+					if len(row) >= 2 { // Name, NameServers
+						zoneName := row[0]
+						nameServers := row[1]
+						m.showPopup = true
+						m.overlay = nil
+					// Build initial list from comma-separated string
+					parts := strings.Split(nameServers, ",")
+					var initial []string
+					for _, p := range parts { if s := strings.TrimSpace(p); s != "" { initial = append(initial, s) } }
+					m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
+					}
+				}
 			}
 		// Reload RRSet
 		case "r":
@@ -240,7 +264,50 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		switch msg.Type {
-		case tea.KeyEnter, tea.KeySpace:
+		case tea.KeyEnter:
+			// Replicate 'e' behavior for Enter: open editor depending on focused table
+			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
+				rows := m.current.Rows()
+				cursor := m.current.Cursor()
+				if cursor < len(rows) {
+					row := rows[cursor]
+					if len(row) >= 5 {
+						proxiedStr := "false"
+						if row[3] == checkMark { proxiedStr = "true" }
+						initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
+						m.showPopup = true
+						m.overlay = nil
+						m.popup = popup.New(
+							[]string{"Name", "TTL", "Type", "Proxied", "Content"},
+							initial,
+							"Resource record editing",
+							func(fields []string) tea.Msg { return popup.SaveActionMsg{Fields: fields} },
+							popup.CancelMsg{},
+						)
+					}
+				}
+				return m, nil
+			}
+			if m.ZonesTable.Focused() && m.ZonesTable.Cursor() >= 0 {
+				rows := m.ZonesTable.Rows()
+				cursor := m.ZonesTable.Cursor()
+				if cursor < len(rows) {
+					row := rows[cursor]
+					if len(row) >= 2 {
+						zoneName := row[0]
+						nameServers := row[1]
+						parts := strings.Split(nameServers, ",")
+						var initial []string
+						for _, p := range parts { if s := strings.TrimSpace(p); s != "" { initial = append(initial, s) } }
+						m.showPopup = true
+						m.overlay = nil
+						m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
+					}
+				}
+				return m, nil
+			}
+			return m, nil
+		case tea.KeySpace:
 			return m, m.handleEnter(msg)
 		}
 
@@ -287,6 +354,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         // Save changes to the table and perform UpdateRR
 		m.updateTableRow(m.current.Cursor(), msg.Fields)
 		return m, m.updateRRFromFields(msg.Fields)
+	case popup.SaveNameServersMsg:
+		// Update zones table NameServers column with joined values
+		if m.ZonesTable.Focused() {
+			cursor := m.ZonesTable.Cursor()
+			rows := m.ZonesTable.Rows()
+			if cursor >= 0 && cursor < len(rows) {
+				joined := strings.Join(msg.Servers, ", ")
+				rows[cursor][1] = joined
+				m.ZonesTable.SetRows(rows)
+			}
+		}
+		m.popup.IsActive = false
+		m.showPopup = false
+		m.overlay = nil
+		return m, nil
 	case popup.CancelMsg:
         // Cancel without persisting changes
 		m.popup.IsActive = false

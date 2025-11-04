@@ -36,6 +36,10 @@ type SaveActionMsg struct {
 
 // CancelMsg is a tea.Msg signaling that editing was canceled.
 type CancelMsg struct{}
+// SaveNameServersMsg is a tea.Msg signaling that NS list should be saved.
+type SaveNameServersMsg struct {
+    Servers []string
+}
 // Model implements tea.Model and represents the popup editor state.
 type Model struct {
 	ColumnNames []string               // Названия столбцов
@@ -60,6 +64,11 @@ type Model struct {
     // Type selection mode (enum)
     inTypeSelect bool
     typeIndex    int
+
+    // Mode-specific state: NameServers list editor
+    Mode        string   // "default" | "nslist"
+    ListValues  []string // values for list mode
+    ListCursor  int      // cursor for list mode
 }
 
 // Ensure that model fulfils the tea.Model interface at compile time.
@@ -107,12 +116,125 @@ func New(columnNames []string, fields []string, title string, saveAction func([]
 	}
 }
 
+// NewNameServersEditor constructs popup Model in list-edit mode for NS values.
+func NewNameServersEditor(initial []string, title string) *Model {
+    // ensure at least 2 lines
+    vals := make([]string, len(initial))
+    copy(vals, initial)
+    for len(vals) < 2 {
+        vals = append(vals, "")
+    }
+    return &Model{
+        Mode:       "nslist",
+        ListValues: vals,
+        ListCursor: 0,
+        IsActive:   true,
+        Title:      title,
+    }
+}
+
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd { return nil }
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     if !m.IsActive {
+        return m, nil
+    }
+
+    // List editor base behavior (multi-line NameServers editor)
+    if m.Mode == "nslist" {
+        // Handle inline text editing overlay first
+        if m.inTextEdit {
+            switch km := msg.(type) {
+            case tea.KeyMsg:
+                switch km.Type {
+                case tea.KeyEnter:
+                    value := strings.TrimSpace(m.textBuf)
+                    if value != "" && !isHostname(value) {
+                        m.textErr = "Name server must be a valid hostname"
+                        return m, nil
+                    }
+                    if value == "" && len(m.ListValues) > 2 {
+                        // delete line when confirming empty value and we have more than minimum
+                        idx := m.ListCursor
+                        m.ListValues = append(m.ListValues[:idx], m.ListValues[idx+1:]...)
+                        if m.ListCursor >= len(m.ListValues) && m.ListCursor > 0 { m.ListCursor-- }
+                        // ensure at least 2 lines remain
+                        for len(m.ListValues) < 2 { m.ListValues = append(m.ListValues, "") }
+                    } else {
+                        m.ListValues[m.ListCursor] = value
+                    }
+                    m.inTextEdit = false
+                    m.textBuf = ""
+                    m.textErr = ""
+                    m.ov = nil
+                case tea.KeyEsc:
+                    m.inTextEdit = false
+                    m.textBuf = ""
+                    m.textErr = ""
+                    m.ov = nil
+                case tea.KeyBackspace:
+                    if len(m.textBuf) > 0 { m.textBuf = m.textBuf[:len(m.textBuf)-1] }
+                case tea.KeyCtrlH:
+                    if len(m.textBuf) > 0 { m.textBuf = m.textBuf[:len(m.textBuf)-1] }
+                case tea.KeyRunes:
+                    if len(km.Runes) > 0 { m.textBuf += string(km.Runes) }
+                }
+            }
+            return m, nil
+        }
+
+        // Base navigation and commands for list mode
+        switch km := msg.(type) {
+        case tea.KeyMsg:
+            switch km.Type {
+            case tea.KeyUp:
+                if m.ListCursor > 0 { m.ListCursor-- }
+                return m, nil
+            case tea.KeyDown:
+                if m.ListCursor == len(m.ListValues)-1 {
+                    // add a new line when moving past the last, but cap at 4
+                    if len(m.ListValues) < 4 {
+                        m.ListValues = append(m.ListValues, "")
+                        m.ListCursor++
+                        return m, nil
+                    }
+                    // already at max; keep cursor at last
+                    return m, nil
+                }
+                m.ListCursor++
+                return m, nil
+            case tea.KeyEnter:
+                // open text editor for current line
+                m.inTextEdit = true
+                m.textBuf = m.ListValues[m.ListCursor]
+                m.textErr = ""
+                return m, nil
+            case tea.KeyCtrlD:
+                // delete current line if more than 2 lines remain
+                if len(m.ListValues) > 2 {
+                    idx := m.ListCursor
+                    m.ListValues = append(m.ListValues[:idx], m.ListValues[idx+1:]...)
+                    if m.ListCursor >= len(m.ListValues) && m.ListCursor > 0 { m.ListCursor-- }
+                    // ensure at least 2 lines remain
+                    for len(m.ListValues) < 2 { m.ListValues = append(m.ListValues, "") }
+                }
+                return m, nil
+            case tea.KeyCtrlS:
+                // save non-empty trimmed values
+                var out []string
+                for _, v := range m.ListValues {
+                    v = strings.TrimSpace(v)
+                    if v != "" { out = append(out, v) }
+                }
+                m.IsActive = false
+                return m, func() tea.Msg { return SaveNameServersMsg{Servers: out} }
+            case tea.KeyEsc:
+                m.IsActive = false
+                return m, func() tea.Msg { return CancelMsg{} }
+            }
+        }
         return m, nil
     }
 
@@ -278,6 +400,19 @@ func (m *Model) View() string {
 	if !m.IsActive {
 		return ""
 	}
+
+    // List editor view
+    if m.Mode == "nslist" {
+        if m.inTextEdit {
+            if m.ov == nil {
+                bg := &baseListView{parent: m}
+                fg := &textView{parent: m}
+                m.ov = overlay.New(fg, bg, overlay.Center, overlay.Center, 0, 0)
+            }
+            return m.ov.View()
+        }
+        return m.viewListBase()
+    }
 
     // When in boolean selection, show a small overlay modal over the edit window
     if m.inBoolSelect && m.isBoolField(m.Cursor) {
@@ -446,6 +581,13 @@ func (b *baseView) Init() tea.Cmd                                  { return nil 
 func (b *baseView) Update(msg tea.Msg) (tea.Model, tea.Cmd)        { return b, nil }
 func (b *baseView) View() string                                   { return b.parent.viewBase() }
 
+// baseListView adapts list editor base view as overlay background
+type baseListView struct{ parent *Model }
+
+func (b *baseListView) Init() tea.Cmd                           { return nil }
+func (b *baseListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return b, nil }
+func (b *baseListView) View() string                            { return b.parent.viewListBase() }
+
 // boolView renders the boolean selection small modal as a tea.Model foreground
 type boolView struct{ parent *Model }
 
@@ -487,7 +629,18 @@ func (t *textView) View() string {
         boolTitleStyle.Render("Edit value"),
     )
     value := fieldStyle.Render(t.parent.textBuf)
-    hint := helpTextStyle.Render(textHint(strings.ToLower(t.parent.ColumnNames[t.parent.Cursor]), strings.ToUpper(t.parent.currentType())))
+    // Build hint safely for both default and nslist modes
+    var hintText string
+    if t.parent.Mode == "nslist" {
+        hintText = "Nameserver hostname, e.g. ns1.example.com"
+    } else {
+        colName := ""
+        if t.parent.Cursor >= 0 && t.parent.Cursor < len(t.parent.ColumnNames) {
+            colName = strings.ToLower(t.parent.ColumnNames[t.parent.Cursor])
+        }
+        hintText = textHint(colName, strings.ToUpper(t.parent.currentType()))
+    }
+    hint := helpTextStyle.Render(hintText)
     errLine := ""
     if t.parent.textErr != "" {
         errStyle := lipgloss.NewStyle().Foreground(theme.Color.Red)
@@ -551,4 +704,32 @@ func (t *typeView) View() string {
     help := helpTextStyle.Render("[↑/↓] Move  [Enter] Apply  [Esc] Cancel")
     body := lipgloss.JoinVertical(lipgloss.Top, header, list, help)
     return boolModalBorder.Render(body)
+}
+
+// viewListBase renders multi-line NS editor
+func (m *Model) viewListBase() string {
+    var lines []string
+    maxW := stringWidth(fmt.Sprintf("--- %s ---", m.Title))
+    for i, v := range m.ListValues {
+        prefix := "   "
+        if i == m.ListCursor { prefix = " > " }
+        raw := fmt.Sprintf("%sns%d: %s", prefix, i+1, v)
+        if w := stringWidth(raw); w > maxW { maxW = w }
+        if i == m.ListCursor {
+            lines = append(lines, fmt.Sprintf(" %s", fieldStyle.Render(raw)))
+        } else {
+            lines = append(lines, raw)
+        }
+    }
+
+    helpPlain := strings.Join([]string{"[↑/↓] Move", "[Enter] Edit", "[Ctrl+D] Delete", "[Ctrl+S] Save", "[Esc] Cancel", "(max 4 NS)"}, " | ")
+    if w := stringWidth(helpPlain); w > maxW { maxW = w }
+    if maxW < 30 { maxW = 30 }
+
+    header := lipgloss.Place(maxW, 1, lipgloss.Center, lipgloss.Top, titleStyle.Render(fmt.Sprintf("--- %s ---", m.Title)))
+    helpStyled := helpTextStyle.Render(helpPlain)
+    content := lipgloss.JoinVertical(lipgloss.Top, header, strings.Join(lines, "\n"), helpStyled)
+    boxed := borderStyle.Render(content)
+    height := 1 + len(lines) + 1
+    return lipgloss.Place(maxW, height, lipgloss.Center, lipgloss.Top, boxed)
 }
