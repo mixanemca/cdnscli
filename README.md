@@ -58,6 +58,7 @@ debug: false
 providers:
   cloudflare:
     type: cloudflare
+    # display-name: Cloudflare  # Optional: custom display name for the provider (defaults to "Cloudflare" for cloudflare type)
     credentials:
       api-token: your-cloudflare-api-token-here
     # Alternative authentication (api-key + email):
@@ -79,14 +80,17 @@ debug: false
 providers:
   cf-production:
     type: cloudflare
+    display-name: Cloudflare Production  # Optional: custom display name
     credentials:
       api-token: production-account-token
   cf-staging:
     type: cloudflare
+    display-name: Cloudflare Staging  # Optional: custom display name
     credentials:
       api-token: staging-account-token
   cf-personal:
     type: cloudflare
+    # display-name is optional - if not specified, defaults to "Cloudflare"
     credentials:
       api-token: personal-account-token
 ```

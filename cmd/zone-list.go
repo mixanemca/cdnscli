@@ -65,5 +65,6 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	a.Printer().ZonesList(zones)
+	providerName := a.DefaultProviderName()
+	a.Printer().ZonesList(zones, providerName)
 }

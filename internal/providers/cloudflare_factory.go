@@ -34,13 +34,13 @@ func NewCloudflareFactory() ProviderFactory {
 
 // Type returns the provider type name.
 func (f *cloudflareFactory) Type() string {
-	return "cloudflare"
+	return TypeCloudflare
 }
 
 // CreateProvider creates a Cloudflare provider from configuration.
 func (f *cloudflareFactory) CreateProvider(cfg *config.ProviderConfig) (Provider, error) {
-	if cfg.Type != "cloudflare" {
-		return nil, NewProviderConfigError("", "cloudflare", "type", 
+	if cfg.Type != TypeCloudflare {
+		return nil, NewProviderConfigError("", TypeCloudflare, "type", 
 			fmt.Sprintf("invalid provider type for Cloudflare factory: %q", cfg.Type), nil)
 	}
 

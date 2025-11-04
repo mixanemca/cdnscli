@@ -27,15 +27,62 @@ import (
 type TextPrinter struct{}
 
 // ZonesList prints list of DNS zones.
-func (pp *TextPrinter) ZonesList(zones []models.Zone) {
-	var fields strings.Builder
-	for _, z := range zones {
-		fields.WriteString(fmt.Sprintf("ID: %s\n", z.ID))
-		fields.WriteString(fmt.Sprintf("Name: %s\n", z.Name))
-		fields.WriteString(fmt.Sprintf("Name Servers: %s\n", strings.Join(z.NameServers, ", ")))
-		fields.WriteString(fmt.Sprintf("Status: %s\n", z.Status))
+func (pp *TextPrinter) ZonesList(zones []models.Zone, providerName string) {
+	if len(zones) == 0 {
+		fmt.Println("No zones found")
+		return
 	}
-	fmt.Print(fields.String())
+
+	// Calculate column widths
+	maxIDLen := 3 // "ID"
+	maxNameLen := 4 // "Name"
+	maxNSLen := 2 // "NS"
+	maxStatusLen := 6 // "Status"
+	maxProviderLen := 8 // "Provider"
+
+	for _, z := range zones {
+		if len(z.ID) > maxIDLen {
+			maxIDLen = len(z.ID)
+		}
+		if len(z.Name) > maxNameLen {
+			maxNameLen = len(z.Name)
+		}
+		nsStr := strings.Join(z.NameServers, ", ")
+		if len(nsStr) > maxNSLen {
+			maxNSLen = len(nsStr)
+		}
+		if len(z.Status) > maxStatusLen {
+			maxStatusLen = len(z.Status)
+		}
+		if len(providerName) > maxProviderLen {
+			maxProviderLen = len(providerName)
+		}
+	}
+
+	// Print header
+	header := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s\n",
+		maxIDLen, "ID",
+		maxNameLen, "Name",
+		maxNSLen, "NS",
+		maxStatusLen, "Status",
+		maxProviderLen, "Provider")
+	fmt.Print(header)
+	
+	// Print separator
+	separator := strings.Repeat("-", len(header)-1) + "\n"
+	fmt.Print(separator)
+
+	// Print rows
+	for _, z := range zones {
+		nsStr := strings.Join(z.NameServers, ", ")
+		row := fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s\n",
+			maxIDLen, z.ID,
+			maxNameLen, z.Name,
+			maxNSLen, nsStr,
+			maxStatusLen, z.Status,
+			maxProviderLen, providerName)
+		fmt.Print(row)
+	}
 }
 
 // RecordsList prints list of DNS resource records.

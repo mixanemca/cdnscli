@@ -169,6 +169,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 		table.WithColumns([]table.Column{
 			{Title: "Name", Width: 50},
 			{Title: "NS", Width: 100},
+			{Title: "Provider", Width: 20},
 		}),
 		table.WithRows([]table.Row{}),
 		table.WithFocused(true),

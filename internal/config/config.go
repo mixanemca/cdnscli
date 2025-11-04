@@ -44,6 +44,10 @@ type ProviderConfig struct {
 	// Type is the provider type (e.g., "cloudflare", "route53", "digitalocean")
 	Type string `mapstructure:"type" yaml:"type"`
 
+	// DisplayName is the custom display name for the provider (e.g., "Cloudflare", "Рога и Копыта")
+	// If not set, a default display name will be used based on the provider type.
+	DisplayName string `mapstructure:"display_name" yaml:"display-name,omitempty"`
+
 	// Credentials holds provider-specific credentials
 	Credentials map[string]interface{} `mapstructure:"credentials" yaml:"credentials"`
 

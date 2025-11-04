@@ -17,6 +17,7 @@ debug: false
 providers:
   cloudflare:
     type: cloudflare
+    # display-name: Cloudflare  # Optional: custom display name for the provider (defaults to "Cloudflare" for cloudflare type)
     credentials:
       # Option 1: Use API token (recommended)
       api-token: your-cloudflare-api-token-here

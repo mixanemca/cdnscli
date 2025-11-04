@@ -24,7 +24,7 @@ import (
 type NonePrinter struct{}
 
 // ZonesList prints list of DNS zones.
-func (pp *NonePrinter) ZonesList(zones []models.Zone) {}
+func (pp *NonePrinter) ZonesList(zones []models.Zone, providerName string) {}
 
 // RecordsList prints list of DNS resource records.
 func (pp *NonePrinter) RecordsList(rrset []models.DNSRecord) {}

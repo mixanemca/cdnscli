@@ -27,8 +27,20 @@ import (
 type JSONPrinter struct{}
 
 // ZonesList prints list of DNS zones.
-func (pp *JSONPrinter) ZonesList(zones []models.Zone) {
-	fmt.Println(marshalJSON(zones))
+func (pp *JSONPrinter) ZonesList(zones []models.Zone, providerName string) {
+	// Add provider name to each zone for JSON output
+	type ZoneWithProvider struct {
+		models.Zone
+		Provider string `json:"provider"`
+	}
+	zonesWithProvider := make([]ZoneWithProvider, len(zones))
+	for i, z := range zones {
+		zonesWithProvider[i] = ZoneWithProvider{
+			Zone:     z,
+			Provider: providerName,
+		}
+	}
+	fmt.Println(marshalJSON(zonesWithProvider))
 }
 
 // RecordsList prints list of DNS resource records.

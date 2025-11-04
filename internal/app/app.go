@@ -46,13 +46,14 @@ func initDefaultRegistry() {
 }
 
 type app struct {
-	providers     map[string]providers.Provider
-	defaultProvider providers.Provider
-	pp            pp.PrettyPrinter
-	output        pp.OutputFormat
-	cfg           *config.Config
-	providerName  string
-	registry      providers.ProviderRegistry
+	providers        map[string]providers.Provider
+	providerDisplayNames map[string]string // Maps provider name to display name
+	defaultProvider  providers.Provider
+	pp               pp.PrettyPrinter
+	output           pp.OutputFormat
+	cfg              *config.Config
+	providerName     string
+	registry         providers.ProviderRegistry
 }
 
 // Option options for app
@@ -66,9 +67,10 @@ func New(opts ...Option) (App, error) {
 
 	// App with default values
 	a := &app{
-		providerName: "cloudflare", // Default provider
-		providers:    make(map[string]providers.Provider),
-		registry:     defaultRegistry,
+		providerName:         providers.TypeCloudflare, // Default provider
+		providers:            make(map[string]providers.Provider),
+		providerDisplayNames: make(map[string]string),
+		registry:             defaultRegistry,
 	}
 
 	for _, opt := range opts {
@@ -87,6 +89,11 @@ func New(opts ...Option) (App, error) {
 				return nil, err
 			}
 			a.providers[name] = provider
+			
+			// Store display name for the provider
+			providerCfg := a.cfg.Providers[name]
+			displayName := providers.GetDisplayName(providerCfg.Type, providerCfg.DisplayName)
+			a.providerDisplayNames[name] = displayName
 		}
 
 		// Set default provider
@@ -114,7 +121,10 @@ func New(opts ...Option) (App, error) {
 			return nil, err
 		}
 		a.defaultProvider = provider
-		a.providers["cloudflare"] = provider
+		providerName := providers.TypeCloudflare
+		a.providers[providerName] = provider
+		// Use default display name for Cloudflare
+		a.providerDisplayNames[providerName] = providers.GetDisplayName(providers.TypeCloudflare, "")
 	}
 
 	a.pp = pp.New(pp.OutputFormat(a.output))
@@ -134,14 +144,14 @@ func createProviderFromEnv(registry providers.ProviderRegistry) (providers.Provi
 	cfg := &config.Config{
 		Providers: make(map[string]config.ProviderConfig),
 	}
-	cfg.Providers["cloudflare"] = config.ProviderConfig{
-		Type: "cloudflare",
+	cfg.Providers[providers.TypeCloudflare] = config.ProviderConfig{
+		Type: providers.TypeCloudflare,
 		Credentials: map[string]interface{}{
 			"api_token": apiToken,
 		},
 	}
 
-	return registry.CreateProvider("cloudflare", cfg)
+	return registry.CreateProvider(providers.TypeCloudflare, cfg)
 }
 
 func (a *app) Provider() providers.Provider {
@@ -167,6 +177,31 @@ func (a *app) ProviderNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (a *app) DefaultProviderName() string {
+	// Find the provider name that matches the default provider
+	for name, provider := range a.providers {
+		if provider == a.defaultProvider {
+			// Return display name if available, otherwise return provider name
+			if displayName, ok := a.providerDisplayNames[name]; ok {
+				return displayName
+			}
+			return name
+		}
+	}
+	// Fallback: try to get display name for stored providerName
+	if displayName, ok := a.providerDisplayNames[a.providerName]; ok {
+		return displayName
+	}
+	// Final fallback: use default display name for provider type if available
+	if a.cfg != nil {
+		if providerCfg, exists := a.cfg.Providers[a.providerName]; exists {
+			return providers.GetDisplayName(providerCfg.Type, providerCfg.DisplayName)
+		}
+	}
+	// Last resort: use provider name as-is
+	return a.providerName
 }
 
 func (a *app) Printer() pp.PrettyPrinter {

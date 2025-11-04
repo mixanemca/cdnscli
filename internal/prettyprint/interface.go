@@ -24,7 +24,7 @@ import (
 // PrettyPrinter interface for printing in various formats.
 type PrettyPrinter interface {
 	// ZonesList prints list of DNS zones.
-	ZonesList(zones []models.Zone)
+	ZonesList(zones []models.Zone, providerName string)
 	// RecordsList prints list of DNS resource records.
 	RecordsList(rrset []models.DNSRecord)
 	// RecordInfo displays information about a specified DNS resource record.

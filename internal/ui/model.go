@@ -140,7 +140,7 @@ func NewModel() *Model {
 // Init This command will be executed immediately when the program starts.
 // Implements tea.Model interface.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(
+		return tea.Batch(
 		m.spinner.Tick, // Start the spinner
 		func() tea.Msg {
 			a, _ := app.New()
@@ -148,6 +148,7 @@ func (m *Model) Init() tea.Cmd {
 			defer cancel()
 
 			zones, _ := a.Provider().ListZones(ctx)
+			providerName := a.DefaultProviderName()
 			rows := []table.Row{}
 			cmds := []tea.Cmd{} // Commands list for async updating
 
@@ -155,6 +156,7 @@ func (m *Model) Init() tea.Cmd {
 				rows = append(rows, table.Row{
 					zone.Name,
 					strings.Join(zone.NameServers, ", "),
+					providerName,
 				})
 				cmds = append(cmds, m.updateRRSet(zone.Name))
 			}
@@ -699,34 +701,48 @@ func (m *Model) resizeZonesColumns() {
     }
     // Account for table cell padding: DefaultStyles adds 1 space left and right per cell
     // So 2 characters per column must be reserved.
-    available := m.width - 2*2 // 2 columns
+    available := m.width - 2*3 // 3 columns
     if available < 20 {
         available = 20
     }
 
-    // Two columns: Name (35%) and NS (65%)
+    // Three columns: Name (35%), NS (50%), Provider (15%)
     minName := 12
     minNS := 10
+    minProvider := 8
     
     nameW := available * 35 / 100
-    nsW := available - nameW
+    providerW := available * 15 / 100
+    nsW := available - nameW - providerW
     
     // Ensure minimum widths
     if nameW < minName {
         nameW = minName
-        nsW = available - nameW
+        nsW = available - nameW - providerW
     }
     if nsW < minNS {
         nsW = minNS
-        nameW = available - nsW
+        nameW = available - nsW - providerW
         if nameW < 8 {
             nameW = 8
+        }
+    }
+    if providerW < minProvider {
+        providerW = minProvider
+        nsW = available - nameW - providerW
+        if nsW < minNS {
+            nsW = minNS
+            nameW = available - nsW - providerW
+            if nameW < 8 {
+                nameW = 8
+            }
         }
     }
 
     cols := []table.Column{
         {Title: "Name", Width: nameW},
         {Title: "NS", Width: nsW},
+        {Title: "Provider", Width: providerW},
     }
     m.ZonesTable.SetColumns(cols)
 }
@@ -960,3 +976,4 @@ func (m *Model) deleteRR(cursor int) tea.Cmd {
         return recordDeletedMsg{recordName: recordName}
     }
 }
+

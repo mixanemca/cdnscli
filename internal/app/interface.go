@@ -30,6 +30,8 @@ type App interface {
 	GetProvider(name string) (providers.Provider, error)
 	// ProviderNames returns a list of all available provider names.
 	ProviderNames() []string
+	// DefaultProviderName returns the name of the default provider.
+	DefaultProviderName() string
 	// Printer returns a specialized API for pretty printing.
 	Printer() prettyprint.PrettyPrinter
 }
