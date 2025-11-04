@@ -1,8 +1,8 @@
 #!/usr/bin/env make -f
 
 PROJECTNAME := cdnscli
-BUILD := $(shell git rev-parse --short HEAD)
-VERSION := $(shell git describe --abbrev=0 --tags)
+BUILD := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+VERSION := $(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0")
 
 # Use linker flags to provide version/build settings
 LDFLAGS=-ldflags "-s -w -X 'github.com/version-go/ldflags.buildVersion=$(VERSION)' -X 'github.com/version-go/ldflags.buildHash=$(BUILD)'"

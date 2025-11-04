@@ -1,0 +1,42 @@
+# cdnscli configuration example
+# Copy this file to ~/.cdnscli.yaml and fill in your credentials
+
+# Default provider to use
+default-provider: cloudflare
+
+# Client timeout for API requests
+client-timeout: 10s
+
+# Output format: text, json, or none
+output-format: text
+
+# Enable debug output
+debug: false
+
+# Provider configurations
+providers:
+  cloudflare:
+    type: cloudflare
+    credentials:
+      # Option 1: Use API token (recommended)
+      api-token: your-cloudflare-api-token-here
+      
+      # Option 2: Use API key + email (alternative)
+      # api-key: your-api-key
+      # email: your-email@example.com
+
+# Example: Multiple Cloudflare accounts
+# providers:
+#   cf-production:
+#     type: cloudflare
+#     credentials:
+#       api-token: production-account-token
+#   cf-staging:
+#     type: cloudflare
+#     credentials:
+#       api-token: staging-account-token
+#   cf-personal:
+#     type: cloudflare
+#     credentials:
+#       api-token: personal-account-token
+

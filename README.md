@@ -1,5 +1,10 @@
 # cdnscli
 
+[![Go Version](https://img.shields.io/badge/go-1.24+-00ADD8?style=flat-square&logo=go)](https://golang.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/mixanemca/cdnscli/ci.yml?branch=main&style=flat-square&label=build)](https://github.com/mixanemca/cdnscli/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mixanemca/cdnscli?style=flat-square)](https://goreportcard.com/report/github.com/mixanemca/cdnscli)
+
 > **Note**: This tool is under active development.
 
 Cloud DNS CLI - manage DNS records across multiple providers!
@@ -36,6 +41,13 @@ Go to `My Account` -> `API Tokens` and create a new token.
 ## Configuration
 
 Create a configuration file `~/.cdnscli.yaml` in your home directory:
+
+> **Tip**: You can copy the example configuration file from the repository:
+> ```bash
+> cp cdnscli.yaml.example ~/.cdnscli.yaml
+> ```
+
+Then edit the file with your credentials:
 
 ```yaml
 default-provider: cloudflare
@@ -115,13 +127,13 @@ cdnscli rr add -t A -n www -z example.com -c 192.0.2.2
 cdnscli rr change --name example.com --zone example.com --type SOA --content "ns1.example.com. admins.example.com. 1970010100 1800 900 604800 86400"
 ```
 
-Delete resourse record
+Delete resource record
 
 ```bash
 cdnscli rr del -t A -n www -z example.com
 ```
 
-## Instalation
+## Installation
 
 ### Go
 
