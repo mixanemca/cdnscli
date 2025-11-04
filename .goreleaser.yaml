@@ -54,6 +54,7 @@ brews:
     repository:
       owner: mixanemca
       name: homebrew-tap
+    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/mixanemca/cdnscli
     description: Cloud DNS CLI - manage DNS records across multiple providers
     test: |
