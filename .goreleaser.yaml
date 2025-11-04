@@ -49,16 +49,17 @@ changelog:
       - "^chore:"
   use: github
 
-brews:
+homebrew_casks:
   - name: cdnscli
     repository:
       owner: mixanemca
       name: homebrew-tap
-    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/mixanemca/cdnscli
     description: Cloud DNS CLI - manage DNS records across multiple providers
-    test: |
-      system "#{bin}/cdnscli --version"
+    binaries:
+      - cdnscli
+    url:
+      template: "https://github.com/mixanemca/cdnscli/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
 
 release:
   github:

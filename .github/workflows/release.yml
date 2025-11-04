@@ -26,13 +26,42 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Delete existing release assets
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "Checking for existing release with tag: $TAG"
+          RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" | \
+            jq -r '.id // empty')
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Found existing release ID: $RELEASE_ID"
+            ASSETS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets" | \
+              jq -r '.[].id')
+            ASSET_COUNT=$(echo "$ASSETS" | grep -v '^$' | wc -l | tr -d ' ')
+            echo "Found $ASSET_COUNT existing asset(s)"
+            for ASSET_ID in $ASSETS; do
+              if [ -n "$ASSET_ID" ]; then
+                echo "Deleting asset ID: $ASSET_ID"
+                curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+                  "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID" || true
+              fi
+            done
+            echo "Finished deleting assets"
+          else
+            echo "No existing release found for tag: $TAG"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
-          version: v2.0.0
+          version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
