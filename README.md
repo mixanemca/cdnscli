@@ -33,6 +33,79 @@ cdnscli help
 Login to CloudFlare [dash](https://dash.cloudflare.com/login).  
 Go to `My Account` -> `API Tokens` and create a new token.
 
+## Configuration
+
+Create a configuration file `~/.cdnscli.yaml` in your home directory:
+
+```yaml
+default-provider: cloudflare
+client-timeout: 10s
+output-format: text
+debug: false
+
+providers:
+  cloudflare:
+    type: cloudflare
+    credentials:
+      api-token: your-cloudflare-api-token-here
+    # Alternative authentication (api-key + email):
+    # credentials:
+    #   api-key: your-api-key
+    #   email: your-email@example.com
+```
+
+#### Multiple Providers
+
+You can configure multiple providers of the same type (e.g., multiple CloudFlare accounts) by giving them different names:
+
+```yaml
+default-provider: cf-production
+client-timeout: 10s
+output-format: text
+debug: false
+
+providers:
+  cf-production:
+    type: cloudflare
+    credentials:
+      api-token: production-account-token
+  cf-staging:
+    type: cloudflare
+    credentials:
+      api-token: staging-account-token
+  cf-personal:
+    type: cloudflare
+    credentials:
+      api-token: personal-account-token
+```
+
+To switch between providers, change the `default-provider` value in the config file, or use the default provider specified in the config.
+
+You can also use environment variables instead of a config file:
+
+```bash
+export CLOUDFLARE_API_TOKEN=your-cloudflare-api-token-here
+# or
+export CDNSCLI_PROVIDERS_CLOUDFLARE_CREDENTIALS_API_TOKEN=your-cloudflare-api-token-here
+# Note: environment variables use underscores, not dashes
+```
+
+#### Multiple Providers with Environment Variables
+
+For multiple providers, you can use environment variables with the provider name:
+
+```bash
+# Set default provider
+export CDNSCLI_DEFAULT_PROVIDER=cf-production
+
+# Configure each provider
+export CDNSCLI_PROVIDERS_CF_PRODUCTION_CREDENTIALS_API_TOKEN=production-account-token
+export CDNSCLI_PROVIDERS_CF_STAGING_CREDENTIALS_API_TOKEN=staging-account-token
+export CDNSCLI_PROVIDERS_CF_PERSONAL_CREDENTIALS_API_TOKEN=personal-account-token
+```
+
+Environment variables follow the pattern: `CDNSCLI_PROVIDERS_<PROVIDER_NAME>_CREDENTIALS_<CREDENTIAL_KEY>`
+
 ## Examples
 
 Add or change resource records
