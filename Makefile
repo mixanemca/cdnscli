@@ -10,7 +10,7 @@ LDFLAGS=-ldflags "-s -w -X 'github.com/version-go/ldflags.buildVersion=$(VERSION
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
-.PHONY: build clean help
+.PHONY: build clean help install
 
 all: build
 
@@ -29,6 +29,10 @@ test: lint
 ## build: Build the binary.
 build: clean test
 	@go build $(LDFLAGS) -o $(PROJECTNAME)
+
+## install: Install the binary to /usr/local/bin.
+install: build
+	@install -m 755 $(PROJECTNAME) /usr/local/bin/$(PROJECTNAME)
 
 ## clean: Cleanup.
 clean:
