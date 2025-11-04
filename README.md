@@ -135,13 +135,45 @@ cdnscli rr del -t A -n www -z example.com
 
 ## Installation
 
-### Go
+### Quick Install (Recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/mixanemca/cdnscli/releases) and extract the binary for your platform.
+
+**macOS (Intel):**
+```bash
+curl -L https://github.com/mixanemca/cdnscli/releases/latest/download/cdnscli_Darwin_x86_64.tar.gz | tar -xz
+sudo mv cdnscli /usr/local/bin/
+```
+
+**macOS (Apple Silicon):**
+```bash
+curl -L https://github.com/mixanemca/cdnscli/releases/latest/download/cdnscli_Darwin_arm64.tar.gz | tar -xz
+sudo mv cdnscli /usr/local/bin/
+```
+
+**Linux:**
+```bash
+# For amd64
+curl -L https://github.com/mixanemca/cdnscli/releases/latest/download/cdnscli_Linux_x86_64.tar.gz | tar -xz
+# For arm64
+curl -L https://github.com/mixanemca/cdnscli/releases/latest/download/cdnscli_Linux_arm64.tar.gz | tar -xz
+sudo mv cdnscli /usr/local/bin/
+```
+
+**Windows:**
+Download the appropriate `cdnscli_Windows_x86_64.zip` or `cdnscli_Windows_arm64.zip` from the releases page and extract the `cdnscli.exe` file.
+
+### Go Install
+
+Install directly from source:
 
 ```bash
 go install github.com/mixanemca/cdnscli@latest
 ```
 
-### Build
+> **Note**: You can also install a specific version by replacing `@latest` with `@v0.99.0` (or any other version tag).
+
+### Build from Source
 
 ```bash
 git clone https://github.com/mixanemca/cdnscli.git

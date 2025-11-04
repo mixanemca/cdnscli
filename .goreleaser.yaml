@@ -5,9 +5,10 @@
 
 version: 2
 
+project_name: cdnscli
+
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
 
 builds:
@@ -22,19 +23,18 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X 'github.com/version-go/ldflags.buildVersion={{.RawVersion}}'
+      - -X 'github.com/version-go/ldflags.buildVersion={{.Version}}'
       - -X 'github.com/version-go/ldflags.buildHash={{.ShortCommit}}'
+    main: ./main.go
 
 archives:
   - format: tar.gz
-    # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
     format_overrides:
       - goos: windows
         format: zip
@@ -46,3 +46,25 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^WIP:"
+      - "^chore:"
+  use: github
+
+release:
+  github:
+    owner: mixanemca
+    name: cdnscli
+  prerelease: auto
+  mode: replace
+  footer: |
+    ## Installation
+
+    Download the binary for your platform from the assets below, or install via:
+
+    ```bash
+    go install github.com/mixanemca/cdnscli@{{ .Tag }}
+    ```
+
+    ### Homebrew (coming soon)
+    ```bash
+    brew install cdnscli
+    ```
