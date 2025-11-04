@@ -40,6 +40,8 @@ type CancelMsg struct{}
 type SaveNameServersMsg struct {
     Servers []string
 }
+// ConfirmDeleteMsg is a tea.Msg signaling that deletion was confirmed.
+type ConfirmDeleteMsg struct{}
 // Model implements tea.Model and represents the popup editor state.
 type Model struct {
 	ColumnNames []string               // Названия столбцов
@@ -66,9 +68,11 @@ type Model struct {
     typeIndex    int
 
     // Mode-specific state: NameServers list editor
-    Mode        string   // "default" | "nslist"
+    Mode        string   // "default" | "nslist" | "confirm"
     ListValues  []string // values for list mode
     ListCursor  int      // cursor for list mode
+    // Confirm dialog state
+    ConfirmIndex int    // 0 => Yes, 1 => No
 }
 
 // Ensure that model fulfils the tea.Model interface at compile time.
@@ -130,6 +134,16 @@ func NewNameServersEditor(initial []string, title string) *Model {
         ListCursor: 0,
         IsActive:   true,
         Title:      title,
+    }
+}
+
+// NewConfirmDialog constructs popup Model in confirmation mode.
+func NewConfirmDialog(title string) *Model {
+    return &Model{
+        Mode:         "confirm",
+        ConfirmIndex: 0, // default to Yes
+        IsActive:     true,
+        Title:        title,
     }
 }
 
@@ -231,6 +245,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.IsActive = false
                 return m, func() tea.Msg { return SaveNameServersMsg{Servers: out} }
             case tea.KeyEsc:
+                m.IsActive = false
+                return m, func() tea.Msg { return CancelMsg{} }
+            }
+        }
+        return m, nil
+    }
+
+    // Confirm dialog mode
+    if m.Mode == "confirm" {
+        switch km := msg.(type) {
+        case tea.KeyMsg:
+            switch km.Type {
+            case tea.KeyLeft, tea.KeyUp:
+                if m.ConfirmIndex > 0 {
+                    m.ConfirmIndex = 0
+                }
+            case tea.KeyRight, tea.KeyDown:
+                if m.ConfirmIndex < 1 {
+                    m.ConfirmIndex = 1
+                }
+            case tea.KeyEnter:
+                // Confirm selection
+                if m.ConfirmIndex == 0 {
+                    // Yes - confirm deletion
+                    m.IsActive = false
+                    return m, func() tea.Msg { return ConfirmDeleteMsg{} }
+                }
+                // No - cancel
+                m.IsActive = false
+                return m, func() tea.Msg { return CancelMsg{} }
+            case tea.KeyEsc:
+                // Cancel
                 m.IsActive = false
                 return m, func() tea.Msg { return CancelMsg{} }
             }
@@ -412,6 +458,11 @@ func (m *Model) View() string {
             return m.ov.View()
         }
         return m.viewListBase()
+    }
+
+    // Confirm dialog view
+    if m.Mode == "confirm" {
+        return m.viewConfirm()
     }
 
     // When in boolean selection, show a small overlay modal over the edit window
@@ -732,4 +783,26 @@ func (m *Model) viewListBase() string {
     boxed := borderStyle.Render(content)
     height := 1 + len(lines) + 1
     return lipgloss.Place(maxW, height, lipgloss.Center, lipgloss.Top, boxed)
+}
+
+// viewConfirm renders confirmation dialog
+func (m *Model) viewConfirm() string {
+    windowWidth := 40
+    header := lipgloss.Place(
+        windowWidth,
+        1,
+        lipgloss.Center,
+        lipgloss.Top,
+        titleStyle.Render(fmt.Sprintf("--- %s ---", m.Title)),
+    )
+
+    yesLine := boolNormalStyle.Render("Yes")
+    noLine := boolNormalStyle.Render("No")
+    if m.ConfirmIndex == 0 {
+        yesLine = boolSelectedStyle.Render("Yes")
+    } else {
+        noLine = boolSelectedStyle.Render("No")
+    }
+    body := lipgloss.JoinVertical(lipgloss.Top, header, yesLine, noLine, helpTextStyle.Render("[←/→] Move  [Enter] Confirm  [Esc] Cancel"))
+    return boolModalBorder.Render(body)
 }

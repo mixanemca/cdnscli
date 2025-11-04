@@ -70,6 +70,16 @@ type (
 	recordCreatedMsg      struct {
 		record models.DNSRecord
 	}
+	recordDeletedMsg      struct {
+		recordName string
+	}
+	recordUpdatedMsg      struct {
+		recordName string
+	}
+	clearNotificationMsg struct{}
+	showNotificationMsg   struct {
+		message string
+	}
 )
 
 // Messages to control the popup window
@@ -88,6 +98,8 @@ type Model struct {
 	height     int
 	spinner    spinner.Model
 	loading    bool
+	notification string      // текущая нотификация
+	notificationTimer *time.Timer // таймер для автоматического скрытия
 	current    *table.Model
 	rrsetCache map[string][]models.DNSRecord
 
@@ -99,6 +111,7 @@ type Model struct {
 	editBuffer []string
 	cursor     int
 	creating   bool // флаг создания новой записи
+	deleteCursor int // позиция курсора для удаления (-1 если не в процессе удаления)
 
 	ClientTimeout time.Duration
 
@@ -119,6 +132,7 @@ func NewModel() *Model {
 	m.spinner = spinner.New()
 	m.spinner.Spinner = spinner.Points
 	m.loading = true
+	m.deleteCursor = -1
 
 	return &m
 }
@@ -281,6 +295,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					popup.CancelMsg{},
 				)
 			}
+		// Delete record
+		case "d":
+			// If RRSet is focused, show confirmation dialog
+			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
+				rows := m.current.Rows()
+				cursor := m.current.Cursor()
+				if cursor < len(rows) {
+					row := rows[cursor]
+					if len(row) > 0 {
+						recordName := row[0]
+						m.deleteCursor = cursor
+						m.showPopup = true
+						m.overlay = nil
+						m.popup = popup.NewConfirmDialog(fmt.Sprintf("Delete record: %s?", recordName))
+					}
+				}
+			}
 		// Reload RRSet
 		case "r":
 			return m, func() tea.Msg { return dataLoadingMsg{} }
@@ -317,6 +348,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		return m, nil // stop spinner
 
+	case showNotificationMsg:
+		return m, m.showNotification(msg.message)
+
+	case clearNotificationMsg:
+		m.notification = ""
+		if m.notificationTimer != nil {
+			m.notificationTimer.Stop()
+			m.notificationTimer = nil
+		}
+		return m, nil
+
 	case recordCreatedMsg:
 		// Add new record to cache and table
 		zoneRow := m.ZonesTable.SelectedRow()
@@ -344,7 +386,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showPopup = false
 		m.creating = false
 		m.overlay = nil
-		return m, nil
+		// Show notification
+		return m, func() tea.Msg { return showNotificationMsg{message: fmt.Sprintf("Record %s created", msg.record.Name)} }
+
+	case recordDeletedMsg:
+		// Remove record from cache and table
+		zoneRow := m.ZonesTable.SelectedRow()
+		if len(zoneRow) > 0 {
+			zoneName := zoneRow[0]
+			// Remove from cache
+			if rrset, ok := m.rrsetCache[zoneName]; ok {
+				for i, r := range rrset {
+					if r.Name == msg.recordName {
+						m.rrsetCache[zoneName] = append(rrset[:i], rrset[i+1:]...)
+						break
+					}
+				}
+			}
+			// Remove from table
+			rows := m.RRSetTable.Rows()
+			for i, row := range rows {
+				if len(row) > 0 && row[0] == msg.recordName {
+					rows = append(rows[:i], rows[i+1:]...)
+					m.RRSetTable.SetRows(rows)
+					// Adjust cursor if needed
+					if m.RRSetTable.Cursor() >= len(rows) && len(rows) > 0 {
+						m.RRSetTable.SetCursor(len(rows) - 1)
+					}
+					break
+				}
+			}
+		}
+		m.deleteCursor = -1
+		// Show notification
+		return m, func() tea.Msg { return showNotificationMsg{message: fmt.Sprintf("Record %s deleted", msg.recordName)} }
+
+	case recordUpdatedMsg:
+		// Show notification for updated record
+		return m, func() tea.Msg { return showNotificationMsg{message: fmt.Sprintf("Record %s updated", msg.recordName)} }
 
 	case switchTableToRRSetCmd:
 		m.switchTable(rrsetTable)
@@ -391,10 +470,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showPopup = false
 		m.overlay = nil
 		return m, nil
+	case popup.ConfirmDeleteMsg:
+		// User confirmed deletion, perform delete
+		if m.deleteCursor >= 0 {
+			return m, m.deleteRR(m.deleteCursor)
+		}
+		m.deleteCursor = -1
 	case popup.CancelMsg:
         // Cancel without persisting changes
 		m.popup.IsActive = false
 		m.creating = false
+		m.deleteCursor = -1
 	}
 
 	if m.loading {
@@ -426,9 +512,10 @@ func (m *Model) viewMenu() string {
 		"[Esc] Exit",
 	}
 
-	// Add Create only for RRSet table
+	// Add Create and Delete only for RRSet table
 	if m.RRSetTable.Focused() {
 		menu = append(menu, "[c] Create")
+		menu = append(menu, "[d] Delete")
 	}
 
 	menu = append(menu, "[e] Edit", "[r] Reload", "[q] Quit")
@@ -442,6 +529,11 @@ func (m *Model) viewStatusBar() string {
 		Padding(0, 1).
 		Width(m.width).
 		Height(statusHeight)
+
+	// Show notification if present
+	if m.notification != "" {
+		return statusStyle.Render(m.notification)
+	}
 
 	if m.loading {
 		return statusStyle.Render(fmt.Sprintf("Loading %s", m.spinner.View()))
@@ -755,7 +847,26 @@ func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
         m.popup.IsActive = false
         m.showPopup = false
         m.overlay = nil
-        return nil
+        // Show notification
+        return recordUpdatedMsg{recordName: target.Name}
+    }
+}
+
+// showNotification displays a notification in the status bar for 3 seconds
+func (m *Model) showNotification(message string) tea.Cmd {
+    // Stop existing timer if any
+    if m.notificationTimer != nil {
+        m.notificationTimer.Stop()
+    }
+    
+    m.notification = message
+    
+    // Create timer to clear notification after 3 seconds
+    m.notificationTimer = time.NewTimer(3 * time.Second)
+    
+    return func() tea.Msg {
+        <-m.notificationTimer.C
+        return clearNotificationMsg{}
     }
 }
 
@@ -793,7 +904,59 @@ func (m *Model) createRRFromFields(fields []string) tea.Cmd {
             return nil
         }
 
-        // Return message to update UI
+		// Return message to update UI
         return recordCreatedMsg{record: newRecord}
+    }
+}
+
+// deleteRR deletes a DNS record via provider
+func (m *Model) deleteRR(cursor int) tea.Cmd {
+    return func() tea.Msg {
+        a, _ := app.New()
+        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+        defer cancel()
+
+        // Get selected zone
+        zoneRow := m.ZonesTable.SelectedRow()
+        if len(zoneRow) == 0 {
+            return nil
+        }
+        zoneName := zoneRow[0]
+
+        // Get record from table
+        rows := m.RRSetTable.Rows()
+        if cursor < 0 || cursor >= len(rows) {
+            return nil
+        }
+        row := rows[cursor]
+        if len(row) == 0 {
+            return nil
+        }
+        recordName := row[0]
+
+        // Find record in cache to get ID
+        var target models.DNSRecord
+        if rrset, ok := m.rrsetCache[zoneName]; ok {
+            for _, r := range rrset {
+                if r.Name == recordName {
+                    target = r
+                    break
+                }
+            }
+        }
+
+        // If record not found in cache, can't delete
+        if target.ID == "" {
+            return nil
+        }
+
+        // Perform delete
+        if err := a.Provider().DeleteRR(ctx, zoneName, target); err != nil {
+            // keep UI responsive; could add error handling UI later
+            return nil
+        }
+
+        // Return message to update UI
+        return recordDeletedMsg{recordName: recordName}
     }
 }
