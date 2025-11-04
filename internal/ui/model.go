@@ -67,6 +67,9 @@ type (
 	dataLoadedMsg         struct{}
 	dataLoadingMsg        struct{}
 	updateRRSetMsg        struct{}
+	recordCreatedMsg      struct {
+		record models.DNSRecord
+	}
 )
 
 // Messages to control the popup window
@@ -95,6 +98,7 @@ type Model struct {
 	editRow    table.Row
 	editBuffer []string
 	cursor     int
+	creating   bool // флаг создания новой записи
 
 	ClientTimeout time.Duration
 
@@ -227,6 +231,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
 						m.showPopup = true
+						m.creating = false
 						m.overlay = nil // recreate overlay on render
 						m.popup = popup.New(
 							[]string{"Name", "TTL", "Type", "Proxied", "Content"},
@@ -256,6 +261,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
 					}
 				}
+			}
+		// Create new record
+		case "c":
+			// If RRSet is focused, open create record popup
+			if m.RRSetTable.Focused() {
+				// Initial empty values for new record
+				initial := []string{"", "3600", "A", "false", ""}
+				m.showPopup = true
+				m.creating = true
+				m.overlay = nil
+				m.popup = popup.New(
+					[]string{"Name", "TTL", "Type", "Proxied", "Content"},
+					initial,
+					"Resource record creation",
+					func(fields []string) tea.Msg {
+						return popup.SaveActionMsg{Fields: fields}
+					},
+					popup.CancelMsg{},
+				)
 			}
 		// Reload RRSet
 		case "r":
@@ -293,6 +317,35 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		return m, nil // stop spinner
 
+	case recordCreatedMsg:
+		// Add new record to cache and table
+		zoneRow := m.ZonesTable.SelectedRow()
+		if len(zoneRow) > 0 {
+			zoneName := zoneRow[0]
+			// Add to cache
+			if _, ok := m.rrsetCache[zoneName]; !ok {
+				m.rrsetCache[zoneName] = []models.DNSRecord{}
+			}
+			m.rrsetCache[zoneName] = append(m.rrsetCache[zoneName], msg.record)
+			// Add to table
+			rows := m.RRSetTable.Rows()
+			newRow := table.Row{
+				msg.record.Name,
+				strconv.Itoa(msg.record.TTL),
+				msg.record.Type,
+				boolToCheckMark(msg.record.Proxied),
+				msg.record.Content,
+			}
+			rows = append(rows, newRow)
+			m.RRSetTable.SetRows(rows)
+		}
+		// Close popup
+		m.popup.IsActive = false
+		m.showPopup = false
+		m.creating = false
+		m.overlay = nil
+		return m, nil
+
 	case switchTableToRRSetCmd:
 		m.switchTable(rrsetTable)
 
@@ -316,7 +369,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
     // Handle save and cancel messages from popup
 	case popup.SaveActionMsg:
-        // Save changes to the table and perform UpdateRR
+		if m.creating {
+			// Create new record
+			return m, m.createRRFromFields(msg.Fields)
+		}
+		// Update existing record
 		m.updateTableRow(m.current.Cursor(), msg.Fields)
 		return m, m.updateRRFromFields(msg.Fields)
 	case popup.SaveNameServersMsg:
@@ -337,6 +394,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case popup.CancelMsg:
         // Cancel without persisting changes
 		m.popup.IsActive = false
+		m.creating = false
 	}
 
 	if m.loading {
@@ -364,12 +422,16 @@ func (m *Model) viewMenu() string {
 
 	menu := []string{
 		"[↑/↓/←/→] Navigate",
-        "[Enter] Show",
-		"[Esc] Exit edit",
-		"[r] Reload",
-		"[e] Edit",
-		"[q] Quit",
+		"[Enter] Show",
+		"[Esc] Exit",
 	}
+
+	// Add Create only for RRSet table
+	if m.RRSetTable.Focused() {
+		menu = append(menu, "[c] Create")
+	}
+
+	menu = append(menu, "[e] Edit", "[r] Reload", "[q] Quit")
 
 	return menuStyle.Render(strings.Join(menu, " | "))
 }
@@ -694,5 +756,44 @@ func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
         m.showPopup = false
         m.overlay = nil
         return nil
+    }
+}
+
+// createRRFromFields builds CreateDNSRecordParams and performs AddRR via provider
+func (m *Model) createRRFromFields(fields []string) tea.Cmd {
+    return func() tea.Msg {
+        a, _ := app.New()
+        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+        defer cancel()
+
+        // Get selected zone
+        zoneRow := m.ZonesTable.SelectedRow()
+        if len(zoneRow) == 0 {
+            return nil
+        }
+        zoneName := zoneRow[0]
+
+        ttl, _ := strconv.Atoi(fields[1])
+        proxied := strings.ToLower(fields[3]) == "true"
+
+        // Build create params
+        params := models.CreateDNSRecordParams{
+            Name:     fields[0],
+            TTL:      ttl,
+            Type:     fields[2],
+            Proxied:  proxied,
+            Content:  fields[4],
+            ZoneName: zoneName,
+        }
+
+        // Perform create
+        newRecord, err := a.Provider().AddRR(ctx, zoneName, params)
+        if err != nil {
+            // keep UI responsive; could add error handling UI later
+            return nil
+        }
+
+        // Return message to update UI
+        return recordCreatedMsg{record: newRecord}
     }
 }
