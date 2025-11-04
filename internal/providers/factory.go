@@ -17,7 +17,6 @@ limitations under the License.
 package providers
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/mixanemca/cdnscli/internal/config"
@@ -68,19 +67,20 @@ func (r *providerRegistry) CreateProvider(name string, cfg *config.Config) (Prov
 	// Get provider configuration
 	providerCfg, err := cfg.GetProvider(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get provider config: %w", err)
+		return nil, NewProviderConfigError(name, "", "", "failed to get provider configuration", err)
 	}
 
 	// Get factory for provider type
 	factory, exists := r.factories[providerCfg.Type]
 	if !exists {
-		return nil, fmt.Errorf("unsupported provider type: %q (supported types: %v)", providerCfg.Type, r.GetSupportedTypes())
+		supported := r.GetSupportedTypes()
+		return nil, NewProviderTypeNotSupportedError(providerCfg.Type, supported)
 	}
 
 	// Create provider using factory
 	provider, err := factory.CreateProvider(providerCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider %q: %w", name, err)
+		return nil, NewProviderCreationError(name, providerCfg.Type, "factory creation failed", err)
 	}
 
 	return provider, nil
@@ -97,4 +97,3 @@ func (r *providerRegistry) GetSupportedTypes() []string {
 	}
 	return types
 }
-

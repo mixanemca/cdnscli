@@ -83,7 +83,8 @@ func New(opts ...Option) (App, error) {
 		for name := range a.cfg.Providers {
 			provider, err := a.registry.CreateProvider(name, a.cfg)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create provider %q: %w", name, err)
+				// Errors from registry are already properly typed, just return them
+				return nil, err
 			}
 			a.providers[name] = provider
 		}
@@ -154,7 +155,7 @@ func (a *app) GetProvider(name string) (providers.Provider, error) {
 
 	provider, exists := a.providers[name]
 	if !exists {
-		return nil, fmt.Errorf("provider %q not found (available providers: %v)", name, a.ProviderNames())
+		return nil, providers.NewProviderNotFoundError(name, a.ProviderNames())
 	}
 
 	return provider, nil

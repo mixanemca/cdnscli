@@ -40,12 +40,19 @@ func (f *cloudflareFactory) Type() string {
 // CreateProvider creates a Cloudflare provider from configuration.
 func (f *cloudflareFactory) CreateProvider(cfg *config.ProviderConfig) (Provider, error) {
 	if cfg.Type != "cloudflare" {
-		return nil, fmt.Errorf("invalid provider type for Cloudflare factory: %q", cfg.Type)
+		return nil, NewProviderConfigError("", "cloudflare", "type", 
+			fmt.Sprintf("invalid provider type for Cloudflare factory: %q", cfg.Type), nil)
 	}
 
 	creds, err := cfg.GetCloudflareCredentials()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Cloudflare credentials: %w", err)
+		return nil, NewProviderCredentialsError("cloudflare", "failed to get credentials", err)
+	}
+
+	// Validate credentials
+	if creds.APIToken == "" && (creds.APIKey == "" || creds.Email == "") {
+		return nil, NewProviderCredentialsError("cloudflare", 
+			"incomplete credentials: need either api_token or (api_key + email)", nil)
 	}
 
 	var api *cloudflare.API
@@ -53,24 +60,24 @@ func (f *cloudflareFactory) CreateProvider(cfg *config.ProviderConfig) (Provider
 	if creds.APIToken != "" {
 		api, err = cloudflare.NewWithAPIToken(creds.APIToken)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Cloudflare API client with token: %w", err)
+			return nil, NewProviderCredentialsError("cloudflare", 
+				"failed to create API client with token", err)
 		}
 	} else if creds.APIKey != "" && creds.Email != "" {
 		api, err = cloudflare.New(creds.APIKey, creds.Email)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Cloudflare API client with key: %w", err)
+			return nil, NewProviderCredentialsError("cloudflare", 
+				"failed to create API client with API key and email", err)
 		}
-	} else {
-		return nil, fmt.Errorf("cloudflare credentials incomplete: need either api_token or (api_key + email)")
 	}
 
 	// Verify token/key
 	_, err = api.VerifyAPIToken(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify Cloudflare API credentials: %w", err)
+		return nil, NewProviderCredentialsError("cloudflare", 
+			"failed to verify API credentials (token/key may be invalid or expired)", err)
 	}
 
 	repo := NewRepoCloudFlare(api)
 	return NewProvider(repo), nil
 }
-
