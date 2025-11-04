@@ -24,16 +24,16 @@ import (
 // Config represents the main configuration structure.
 type Config struct {
 	// DefaultProvider is the name of the default provider to use
-	DefaultProvider string `mapstructure:"default_provider" yaml:"default_provider"`
+	DefaultProvider string `mapstructure:"default_provider" yaml:"default-provider,omitempty"`
 
 	// Providers contains configuration for all DNS providers
 	Providers map[string]ProviderConfig `mapstructure:"providers" yaml:"providers"`
 
 	// ClientTimeout is the default timeout for API requests
-	ClientTimeout time.Duration `mapstructure:"client_timeout" yaml:"client_timeout"`
+	ClientTimeout time.Duration `mapstructure:"client_timeout" yaml:"client-timeout,omitempty"`
 
 	// OutputFormat is the default output format
-	OutputFormat string `mapstructure:"output_format" yaml:"output_format"`
+	OutputFormat string `mapstructure:"output_format" yaml:"output-format,omitempty"`
 
 	// Debug enables debug output
 	Debug bool `mapstructure:"debug" yaml:"debug"`
@@ -67,11 +67,17 @@ type CloudflareCredentials struct {
 func (pc *ProviderConfig) GetCloudflareCredentials() (*CloudflareCredentials, error) {
 	creds := &CloudflareCredentials{}
 
+	// Support both api_token and api-token (with dash)
 	if apiToken, ok := pc.Credentials["api_token"].(string); ok {
+		creds.APIToken = apiToken
+	} else if apiToken, ok := pc.Credentials["api-token"].(string); ok {
 		creds.APIToken = apiToken
 	}
 
+	// Support both api_key and api-key (with dash)
 	if apiKey, ok := pc.Credentials["api_key"].(string); ok {
+		creds.APIKey = apiKey
+	} else if apiKey, ok := pc.Credentials["api-key"].(string); ok {
 		creds.APIKey = apiKey
 	}
 
@@ -81,4 +87,3 @@ func (pc *ProviderConfig) GetCloudflareCredentials() (*CloudflareCredentials, er
 
 	return creds, nil
 }
-

@@ -183,10 +183,10 @@ func Save(cfg *Config) error {
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType(DefaultConfigType)
 
-	// Set values
-	viper.Set("default_provider", cfg.DefaultProvider)
-	viper.Set("client_timeout", cfg.ClientTimeout)
-	viper.Set("output_format", cfg.OutputFormat)
+	// Set values (use dashes for consistency with flags)
+	viper.Set("default-provider", cfg.DefaultProvider)
+	viper.Set("client-timeout", cfg.ClientTimeout)
+	viper.Set("output-format", cfg.OutputFormat)
 	viper.Set("debug", cfg.Debug)
 
 	// Set providers
@@ -194,7 +194,9 @@ func Save(cfg *Config) error {
 		viper.Set(fmt.Sprintf("providers.%s.type", name), provider.Type)
 		if provider.Credentials != nil {
 			for key, value := range provider.Credentials {
-				viper.Set(fmt.Sprintf("providers.%s.credentials.%s", name, key), value)
+				// Normalize keys to use dashes (api_token -> api-token)
+				normalizedKey := strings.ReplaceAll(key, "_", "-")
+				viper.Set(fmt.Sprintf("providers.%s.credentials.%s", name, normalizedKey), value)
 			}
 		}
 		if provider.Options != nil {
@@ -217,4 +219,3 @@ func Save(cfg *Config) error {
 
 	return nil
 }
-
