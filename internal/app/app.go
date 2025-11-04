@@ -18,22 +18,41 @@ limitations under the License.
 package app
 
 import (
-	"context"
 	"fmt"
 	"os"
+	"sync"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cdnscli/internal/config"
 	pp "github.com/mixanemca/cdnscli/internal/prettyprint"
 	"github.com/mixanemca/cdnscli/internal/providers"
 )
 
+var (
+	// defaultRegistry is the default provider registry with all providers registered.
+	defaultRegistry providers.ProviderRegistry
+	registryOnce     sync.Once
+)
+
+// initDefaultRegistry initializes the default registry with all available providers.
+func initDefaultRegistry() {
+	registryOnce.Do(func() {
+		defaultRegistry = providers.NewProviderRegistry()
+		// Register all available providers
+		defaultRegistry.Register(providers.NewCloudflareFactory())
+		// Add more providers here as they are implemented
+		// defaultRegistry.Register(providers.NewRoute53Factory())
+		// defaultRegistry.Register(providers.NewDigitalOceanFactory())
+	})
+}
+
 type app struct {
-	provider providers.Provider
-	pp       pp.PrettyPrinter
-	output   pp.OutputFormat
-	cfg      *config.Config
-	providerName string
+	providers     map[string]providers.Provider
+	defaultProvider providers.Provider
+	pp            pp.PrettyPrinter
+	output        pp.OutputFormat
+	cfg           *config.Config
+	providerName  string
+	registry      providers.ProviderRegistry
 }
 
 // Option options for app
@@ -42,9 +61,14 @@ type Option func(c *app) error
 // New creates a new application instance. Various client options can be used to configure
 // the application.
 func New(opts ...Option) (App, error) {
+	// Initialize default registry
+	initDefaultRegistry()
+
 	// App with default values
 	a := &app{
 		providerName: "cloudflare", // Default provider
+		providers:    make(map[string]providers.Provider),
+		registry:     defaultRegistry,
 	}
 
 	for _, opt := range opts {
@@ -53,44 +77,43 @@ func New(opts ...Option) (App, error) {
 		}
 	}
 
-	// If config is provided, use it to initialize provider
+	// If config is provided, use it to initialize providers
 	if a.cfg != nil {
-		provider, err := a.cfg.GetProvider(a.providerName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get provider %q: %w", a.providerName, err)
+		// Initialize all providers from config
+		for name := range a.cfg.Providers {
+			provider, err := a.registry.CreateProvider(name, a.cfg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create provider %q: %w", name, err)
+			}
+			a.providers[name] = provider
 		}
 
-		// Initialize provider based on type
-		switch provider.Type {
-		case "cloudflare":
-			repo, err := a.initCloudflareProvider(provider)
-			if err != nil {
-				return nil, fmt.Errorf("failed to initialize Cloudflare provider: %w", err)
+		// Set default provider
+		defaultName := a.providerName
+		if a.cfg.DefaultProvider != "" {
+			defaultName = a.cfg.DefaultProvider
+		}
+
+		// Try to get default provider from config
+		if defaultProvider, exists := a.providers[defaultName]; exists {
+			a.defaultProvider = defaultProvider
+		} else if len(a.providers) > 0 {
+			// If requested provider not found, use first available
+			for _, p := range a.providers {
+				a.defaultProvider = p
+				break
 			}
-			a.provider = providers.NewProvider(repo)
-		default:
-			return nil, fmt.Errorf("unsupported provider type: %q", provider.Type)
+		} else {
+			return nil, fmt.Errorf("no providers configured")
 		}
 	} else {
 		// Fallback to environment variable for backward compatibility
-		apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-		if apiToken == "" {
-			return nil, fmt.Errorf("no configuration provided and CLOUDFLARE_API_TOKEN not set")
-		}
-
-		api, err := cloudflare.NewWithAPIToken(apiToken)
+		provider, err := createProviderFromEnv(a.registry)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Cloudflare API client: %w", err)
+			return nil, err
 		}
-
-		// Verify token
-		_, err = api.VerifyAPIToken(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify Cloudflare API token: %w", err)
-		}
-
-		repo := providers.NewRepoCloudFlare(api)
-		a.provider = providers.NewProvider(repo)
+		a.defaultProvider = provider
+		a.providers["cloudflare"] = provider
 	}
 
 	a.pp = pp.New(pp.OutputFormat(a.output))
@@ -98,40 +121,51 @@ func New(opts ...Option) (App, error) {
 	return a, nil
 }
 
-// initCloudflareProvider initializes Cloudflare provider from config.
-func (a *app) initCloudflareProvider(provider *config.ProviderConfig) (providers.Repo, error) {
-	creds, err := provider.GetCloudflareCredentials()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Cloudflare credentials: %w", err)
+// createProviderFromEnv creates a provider from environment variables (backward compatibility).
+func createProviderFromEnv(registry providers.ProviderRegistry) (providers.Provider, error) {
+	// Check for Cloudflare API token in environment
+	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+	if apiToken == "" {
+		return nil, fmt.Errorf("no configuration provided and CLOUDFLARE_API_TOKEN not set")
 	}
 
-	var api *cloudflare.API
-
-	if creds.APIToken != "" {
-		api, err = cloudflare.NewWithAPIToken(creds.APIToken)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Cloudflare API client with token: %w", err)
-		}
-	} else if creds.APIKey != "" && creds.Email != "" {
-		api, err = cloudflare.New(creds.APIKey, creds.Email)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Cloudflare API client with key: %w", err)
-		}
-	} else {
-		return nil, fmt.Errorf("cloudflare credentials incomplete: need either api_token or (api_key + email)")
+	// Create temporary config with Cloudflare provider from env
+	cfg := &config.Config{
+		Providers: make(map[string]config.ProviderConfig),
+	}
+	cfg.Providers["cloudflare"] = config.ProviderConfig{
+		Type: "cloudflare",
+		Credentials: map[string]interface{}{
+			"api_token": apiToken,
+		},
 	}
 
-	// Verify token/key
-	_, err = api.VerifyAPIToken(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify Cloudflare API credentials: %w", err)
-	}
-
-	return providers.NewRepoCloudFlare(api), nil
+	return registry.CreateProvider("cloudflare", cfg)
 }
 
 func (a *app) Provider() providers.Provider {
-	return a.provider
+	return a.defaultProvider
+}
+
+func (a *app) GetProvider(name string) (providers.Provider, error) {
+	if name == "" {
+		return a.Provider(), nil
+	}
+
+	provider, exists := a.providers[name]
+	if !exists {
+		return nil, fmt.Errorf("provider %q not found (available providers: %v)", name, a.ProviderNames())
+	}
+
+	return provider, nil
+}
+
+func (a *app) ProviderNames() []string {
+	names := make([]string, 0, len(a.providers))
+	for name := range a.providers {
+		names = append(names, name)
+	}
+	return names
 }
 
 func (a *app) Printer() pp.PrettyPrinter {

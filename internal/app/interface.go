@@ -23,8 +23,13 @@ import (
 
 // App its main application interface.
 type App interface {
-	// Provider returns a specialized API for interacting with providers.
+	// Provider returns the default provider for interacting with DNS providers.
 	Provider() providers.Provider
+	// GetProvider returns a provider by name. Returns an error if the provider is not found.
+	// If name is empty, returns the default provider.
+	GetProvider(name string) (providers.Provider, error)
+	// ProviderNames returns a list of all available provider names.
+	ProviderNames() []string
 	// Printer returns a specialized API for pretty printing.
 	Printer() prettyprint.PrettyPrinter
 }
