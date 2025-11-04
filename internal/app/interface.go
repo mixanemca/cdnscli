@@ -25,6 +25,6 @@ import (
 type App interface {
 	// Provider returns a specialized API for interacting with providers.
 	Provider() providers.Provider
-	// Printter returns a specialized API for pretty printing.
+	// Printer returns a specialized API for pretty printing.
 	Printer() prettyprint.PrettyPrinter
 }
