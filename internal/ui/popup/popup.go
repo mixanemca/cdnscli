@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package popup holds cfdnscli UI elements for editing.
+// Package popup holds cdnscli UI elements for editing.
 package popup
 
 import (
@@ -25,7 +25,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-    "github.com/mixanemca/cfdnscli/internal/ui/theme"
+    "github.com/mixanemca/cdnscli/internal/ui/theme"
     overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 

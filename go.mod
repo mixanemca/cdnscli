@@ -1,4 +1,4 @@
-module github.com/mixanemca/cfdnscli
+module github.com/mixanemca/cdnscli
 
 go 1.24.2
 

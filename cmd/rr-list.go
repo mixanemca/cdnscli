@@ -22,8 +22,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ var rrListCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "list",
 	Short:   "List of zone resource records",
-	Example: `  cfdnscli rr list --zone example.com`,
+	Example: `  cdnscli rr list --zone example.com`,
 	Run:     rrListCmdRun,
 }
 
@@ -48,6 +48,7 @@ func init() {
 
 func rrListCmdRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -55,7 +56,7 @@ func rrListCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	recs, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{

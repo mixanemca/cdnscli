@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ var rrAddCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "add",
 	Short:   "Add resource record to zone",
-	Example: `  cfdnscli rr add --name www --zone example.com --type A --ttl 400 --content 192.0.2.1`,
+	Example: `  cdnscli rr add --name www --zone example.com --type A --ttl 400 --content 192.0.2.1`,
 	Run:     rrAddCmdRun,
 }
 
@@ -63,6 +63,7 @@ func init() {
 
 func rrAddCmdRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -89,7 +90,7 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 		ZoneName: zone,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	rr, err := a.Provider().AddRR(ctx, zone, params)

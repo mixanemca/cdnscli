@@ -20,7 +20,7 @@ package providers
 import (
 	"context"
 
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // Provider exposes methods for manage DNS.

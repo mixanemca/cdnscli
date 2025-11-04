@@ -17,8 +17,8 @@ limitations under the License.
 package app
 
 import (
-	"github.com/mixanemca/cfdnscli/internal/prettyprint"
-	"github.com/mixanemca/cfdnscli/internal/providers"
+	"github.com/mixanemca/cdnscli/internal/prettyprint"
+	"github.com/mixanemca/cdnscli/internal/providers"
 )
 
 // App its main application interface.

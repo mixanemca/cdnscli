@@ -22,7 +22,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ var rrUpdateCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "update",
 	Short:   "Update an existing DNS record",
-	Example: `  cfdnscli rr update --name www --zone example.com --type A --content 192.0.2.1`,
+	Example: `  cdnscli rr update --name www --zone example.com --type A --content 192.0.2.1`,
 	Run:     rrUpdateCmdRun,
 }
 
@@ -61,6 +61,7 @@ func init() {
 
 func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -68,7 +69,7 @@ func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	rr, err := a.Provider().GetRRByName(ctx, zone, name)

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package cmd holds cfdnscli command and it sub-commands.
+// Package cmd holds cdnscli command and it sub-commands.
 package cmd
 
 import (
@@ -26,9 +26,10 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	pp "github.com/mixanemca/cfdnscli/internal/prettyprint"
-	"github.com/mixanemca/cfdnscli/internal/ui"
-	"github.com/mixanemca/cfdnscli/internal/ui/theme"
+	"github.com/mixanemca/cdnscli/internal/config"
+	pp "github.com/mixanemca/cdnscli/internal/prettyprint"
+	"github.com/mixanemca/cdnscli/internal/ui"
+	"github.com/mixanemca/cdnscli/internal/ui/theme"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/thediveo/enumflag/v2"
@@ -45,6 +46,7 @@ var (
 	rrtype        string
 	ttl           int
 	zone          string
+	appConfig     *config.Config
 )
 
 // define output format with default
@@ -58,8 +60,8 @@ var outputFormatList = map[pp.OutputFormat][]string{
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:     "cfdnscli",
-	Short:   "Work with CloudFlare DNS easily from CLI!",
+	Use:     "cdnscli",
+	Short:   "Cloud DNS CLI - manage DNS records across multiple providers",
 	Version: ldflags.Version(),
 	Run:     rootCmdRun,
 }
@@ -78,14 +80,14 @@ func init() {
 	vt := rootCmd.VersionTemplate()
 	rootCmd.SetVersionTemplate(vt[:len(vt)-1] + " (" + build + ")\n")
 
-	// TODO: add config package
-	// cobra.OnInitialize(initConfig)
+	// Initialize config on command execution
+	cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cfdnscli.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cdnscli.yaml)")
 	rootCmd.PersistentFlags().DurationVarP(&clientTimeout, "timeout", "T", 10*time.Second, "client timeout")
 	rootCmd.PersistentFlags().VarP(
 		enumflag.New(&outputFormat, "output-format", outputFormatList, enumflag.EnumCaseSensitive),
@@ -101,6 +103,60 @@ func init() {
 	}
 	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
 		log.Fatalf("Failed bind flag %q: %v", "debug", err)
+	}
+	if err := viper.BindPFlag("client_timeout", rootCmd.PersistentFlags().Lookup("timeout")); err != nil {
+		log.Fatalf("Failed bind flag %q: %v", "client_timeout", err)
+	}
+}
+
+// getTimeout returns the timeout to use, checking config first, then flag, then default.
+func getTimeout() time.Duration {
+	if appConfig != nil && clientTimeout == 0 {
+		return appConfig.GetClientTimeout()
+	}
+	if clientTimeout != 0 {
+		return clientTimeout
+	}
+	return 10 * time.Second
+}
+
+// initConfig reads in config file and ENV variables if set.
+func initConfig() {
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: Failed to load config: %v\n", err)
+		// Continue with default config
+		cfg = &config.Config{
+			ClientTimeout: 10 * time.Second,
+			OutputFormat:  "text",
+			Debug:          false,
+			Providers:     make(map[string]config.ProviderConfig),
+		}
+	}
+
+	// Override with command line flags if set
+	if clientTimeout != 0 {
+		cfg.ClientTimeout = clientTimeout
+		viper.Set("client_timeout", clientTimeout)
+	}
+	if outputFormat != pp.FormatText {
+		// Convert OutputFormat to string using the format list
+		if formats, ok := outputFormatList[outputFormat]; ok && len(formats) > 0 {
+			cfg.OutputFormat = formats[0]
+			viper.Set("output_format", formats[0])
+		}
+	}
+	if debug {
+		cfg.Debug = debug
+		viper.Set("debug", debug)
+	}
+
+	appConfig = cfg
+
+	// Validate config
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: Config validation failed: %v\n", err)
+		// Continue anyway - validation errors might be non-critical
 	}
 }
 
@@ -134,7 +190,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 	)
 
 	m := ui.NewModel()
-	m.ClientTimeout = clientTimeout
+	m.ClientTimeout = getTimeout()
 	m.ZonesTable = zonesTable
 	m.RRSetTable = rrsetTable
 	m.TableStyle = tableStyle
@@ -148,31 +204,3 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 	}
 }
 
-/*
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".cfdnscli" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".cfdnscli")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf("ERROR: Config file %s not found", viper.ConfigFileUsed())
-		os.Exit(1)
-	}
-}
-*/

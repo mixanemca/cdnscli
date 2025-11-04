@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )

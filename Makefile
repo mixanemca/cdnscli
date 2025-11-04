@@ -1,6 +1,6 @@
 #!/usr/bin/env make -f
 
-PROJECTNAME := cfdnscli
+PROJECTNAME := cdnscli
 BUILD := $(shell git rev-parse --short HEAD)
 VERSION := $(shell git describe --abbrev=0 --tags)
 

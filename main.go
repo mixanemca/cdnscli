@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// The cfdnscli program.
+// The cdnscli program.
 package main
 
-import "github.com/mixanemca/cfdnscli/cmd"
+import "github.com/mixanemca/cdnscli/cmd"
 
 func main() {
 	cmd.Execute()

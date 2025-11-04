@@ -18,7 +18,7 @@ limitations under the License.
 package prettyprint
 
 import (
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // PrettyPrinter interface for printing in various formats.

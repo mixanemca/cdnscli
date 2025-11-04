@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package ui holds cfdnscli UI.
+// Package ui holds cdnscli UI.
 package ui
 
 import (
@@ -28,10 +28,10 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/mixanemca/cfdnscli/internal/app"
-	"github.com/mixanemca/cfdnscli/internal/models"
-	"github.com/mixanemca/cfdnscli/internal/ui/popup"
-	"github.com/mixanemca/cfdnscli/internal/ui/theme"
+	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/ui/popup"
+	"github.com/mixanemca/cdnscli/internal/ui/theme"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -497,7 +497,7 @@ func (m *Model) viewHeader() string {
 		Width(m.width).
 		Height(headerHeight)
 
-	return headerStyle.Render("CloudFlare DNS CLI")
+	return headerStyle.Render("Cloud DNS CLI")
 }
 
 func (m *Model) viewMenu() string {

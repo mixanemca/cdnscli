@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +31,7 @@ var zoneListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Use:     "list",
 	Short:   "Lists zones on an account. Optionally takes a name of zone to filter against.",
-	Example: "  cfdnscli zone list",
+	Example: "  cdnscli zone list",
 	Run:     zoneListRun,
 }
 
@@ -43,6 +43,7 @@ func init() {
 
 func zoneListRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -50,7 +51,7 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	var zones []models.Zone

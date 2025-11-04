@@ -1,12 +1,12 @@
-# cfdnscli
+# cdnscli
 
 > **Note**: This tool is under active development.
 
-Work with CloudFlare DNS easily from CLI!
+Cloud DNS CLI - manage DNS records across multiple providers!
 
 ## What is it?
 
-`cfdnscli` is a powerful cross-platform utility for managing DNS records and zones in CloudFlare, written in Go.
+`cdnscli` is a powerful cross-platform utility for managing DNS records and zones across multiple DNS providers, written in Go.
 It provides convenient tools for both task automation and manual management through the terminal.
 
 The utility supports two modes of operation:
@@ -25,7 +25,7 @@ The utility supports two modes of operation:
 ## Usage
 
 ```bash
-cfdnscli help
+cdnscli help
 ```
 
 #### Receiving a token
@@ -38,14 +38,14 @@ Go to `My Account` -> `API Tokens` and create a new token.
 Add or change resource records
 
 ```bash
-cfdnscli rr add -t A -n www -z example.com -c 192.0.2.2
-cfdnscli rr change --name example.com --zone example.com --type SOA --content "ns1.example.com. admins.example.com. 1970010100 1800 900 604800 86400"
+cdnscli rr add -t A -n www -z example.com -c 192.0.2.2
+cdnscli rr change --name example.com --zone example.com --type SOA --content "ns1.example.com. admins.example.com. 1970010100 1800 900 604800 86400"
 ```
 
 Delete resourse record
 
 ```bash
-cfdnscli rr del -t A -n www -z example.com
+cdnscli rr del -t A -n www -z example.com
 ```
 
 ## Instalation
@@ -53,14 +53,14 @@ cfdnscli rr del -t A -n www -z example.com
 ### Go
 
 ```bash
-go install github.com/mixanemca/cfdnscli@latest
+go install github.com/mixanemca/cdnscli@latest
 ```
 
 ### Build
 
 ```bash
-git clone https://github.com/mixanemca/cfdnscli.git
-cd cfdnscli
+git clone https://github.com/mixanemca/cdnscli.git
+cd cdnscli
 make
 make install
 ```
@@ -73,4 +73,4 @@ make test
 
 ## License
 
-[Apache 2.0](https://github.com/mixanemca/cfdnscli/raw/main/LICENSE)
+[Apache 2.0](https://github.com/mixanemca/cdnscli/raw/main/LICENSE)

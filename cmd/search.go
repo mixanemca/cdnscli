@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ import (
 var searchCmd = &cobra.Command{
 	Use:     "search",
 	Short:   "Search resource records",
-	Example: "  cfdnscli search --zone example.com --content 192.0.2.1",
+	Example: "  cdnscli search --zone example.com --content 192.0.2.1",
 	Run:     searchCmdRun,
 }
 
@@ -56,6 +56,7 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -63,7 +64,7 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	if len(name) > 0 {

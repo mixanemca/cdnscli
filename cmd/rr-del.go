@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ var rrDelCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "delete",
 	Short:   "Delete resource record from zone",
-	Example: `  cfdnscli rr delete --name www --zone example.com --type A --content 192.0.2.1`,
+	Example: `  cdnscli rr delete --name www --zone example.com --type A --content 192.0.2.1`,
 	Run:     rrDelCmdRun,
 }
 
@@ -60,6 +60,7 @@ func init() {
 
 func rrDelCmdRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -75,7 +76,7 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 
 	rrtype = strings.ToUpper(rrtype)
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	rr, err := a.Provider().GetRRByName(ctx, zone, name)

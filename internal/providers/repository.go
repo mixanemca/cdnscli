@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // Repo repository of DNS zones and resource records.

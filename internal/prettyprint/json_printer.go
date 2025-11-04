@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // JSONPrinter prints in JSON format.

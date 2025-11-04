@@ -16,12 +16,31 @@ limitations under the License.
 
 package app
 
-import "github.com/mixanemca/cfdnscli/internal/prettyprint"
+import (
+	"github.com/mixanemca/cdnscli/internal/config"
+	"github.com/mixanemca/cdnscli/internal/prettyprint"
+)
 
 // WithOutputFormat sets an app's output format
 func WithOutputFormat(output prettyprint.OutputFormat) Option {
 	return func(a *app) error {
 		a.output = output
+		return nil
+	}
+}
+
+// WithConfig sets the application configuration
+func WithConfig(cfg *config.Config) Option {
+	return func(a *app) error {
+		a.cfg = cfg
+		return nil
+	}
+}
+
+// WithProvider sets the provider name to use
+func WithProvider(providerName string) Option {
+	return func(a *app) error {
+		a.providerName = providerName
 		return nil
 	}
 }

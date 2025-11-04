@@ -22,7 +22,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/mixanemca/cfdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ var rrInfoCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Use:     "info",
 	Short:   "Details for a single DNS record",
-	Example: `  cfdnscli rr info --name www --zone example.com`,
+	Example: `  cdnscli rr info --name www --zone example.com`,
 	Run:     rrInfoCmdRun,
 }
 
@@ -52,6 +52,7 @@ func init() {
 
 func rrInfoCmdRun(cmd *cobra.Command, args []string) {
 	a, err := app.New(
+		app.WithConfig(appConfig),
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
@@ -59,7 +60,7 @@ func rrInfoCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clientTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
 	rr, err := a.Provider().GetRRByName(ctx, zone, name)

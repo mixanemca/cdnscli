@@ -17,7 +17,7 @@ limitations under the License.
 package prettyprint
 
 import (
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // NonePrinter don't print enythings. Use for scripts when output not needed.

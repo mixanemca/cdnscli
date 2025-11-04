@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mixanemca/cfdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/models"
 )
 
 // TextPrinter prints in human-readable format.
