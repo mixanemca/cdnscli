@@ -33,9 +33,11 @@ This is a pre-release version to test the release process before v1.0.0.
 - [ ] All tests pass (`make test`)
 - [ ] Version number updated if needed
 - [ ] CHANGELOG reviewed (auto-generated from commits)
+- [ ] Homebrew tap repository exists (`mixanemca/homebrew-tap`)
 - [ ] Tag created and pushed
 - [ ] GitHub Release created automatically
 - [ ] Binaries uploaded to GitHub Releases
+- [ ] Homebrew formula updated automatically
 - [ ] README installation instructions verified
 
 ## Manual Release (if needed)

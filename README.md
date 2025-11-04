@@ -27,6 +27,14 @@ The utility supports two modes of operation:
 - Export and import resource record sets in a convenient format.
 - Easy-to-use interface, ideal for administrators and developers.
 
+## Supported Providers
+
+| Provider | Authentication | Features | Status |
+|----------|---------------|----------|--------|
+| [Cloudflare](https://www.cloudflare.com/) | API Token<br>API Key + Email | ✅ Add/Update/Delete records<br>✅ List zones and records<br>✅ Search records<br>✅ Multiple accounts support<br>✅ Custom display names | ✅ Fully Supported |
+
+> **Note**: More providers are planned for future releases. If you'd like to see support for a specific provider, please [open an issue](https://github.com/mixanemca/cdnscli/issues).
+
 ## Usage
 
 ```bash
@@ -166,6 +174,14 @@ sudo mv cdnscli /usr/local/bin/
 
 **Windows:**
 Download the appropriate `cdnscli_Windows_x86_64.zip` or `cdnscli_Windows_arm64.zip` from the releases page and extract the `cdnscli.exe` file.
+
+### Homebrew (macOS/Linux)
+
+Install using Homebrew:
+
+```bash
+brew install mixanemca/tap/cdnscli
+```
 
 ### Go Install
 
