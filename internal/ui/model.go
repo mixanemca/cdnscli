@@ -193,6 +193,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
 		m.width = msg.Width
+        m.applyLayout()
 
     // Key pressed
 	case tea.KeyMsg:
@@ -263,50 +264,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-		switch msg.Type {
-		case tea.KeyEnter:
-			// Replicate 'e' behavior for Enter: open editor depending on focused table
-			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
-				rows := m.current.Rows()
-				cursor := m.current.Cursor()
-				if cursor < len(rows) {
-					row := rows[cursor]
-					if len(row) >= 5 {
-						proxiedStr := "false"
-						if row[3] == checkMark { proxiedStr = "true" }
-						initial := []string{row[0], row[1], row[2], proxiedStr, row[4]}
-						m.showPopup = true
-						m.overlay = nil
-						m.popup = popup.New(
-							[]string{"Name", "TTL", "Type", "Proxied", "Content"},
-							initial,
-							"Resource record editing",
-							func(fields []string) tea.Msg { return popup.SaveActionMsg{Fields: fields} },
-							popup.CancelMsg{},
-						)
-					}
-				}
-				return m, nil
-			}
-			if m.ZonesTable.Focused() && m.ZonesTable.Cursor() >= 0 {
-				rows := m.ZonesTable.Rows()
-				cursor := m.ZonesTable.Cursor()
-				if cursor < len(rows) {
-					row := rows[cursor]
-					if len(row) >= 2 {
-						zoneName := row[0]
-						nameServers := row[1]
-						parts := strings.Split(nameServers, ",")
-						var initial []string
-						for _, p := range parts { if s := strings.TrimSpace(p); s != "" { initial = append(initial, s) } }
-						m.showPopup = true
-						m.overlay = nil
-						m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
-					}
-				}
-				return m, nil
-			}
-			return m, nil
+    switch msg.Type {
+    case tea.KeyEnter:
+            // Enter should show records (switch to RRSet) when zones table is focused
+            if m.ZonesTable.Focused() {
+                return m, m.handleEnter(msg)
+            }
+            // In RRSet keep Enter as no-op; use 'e' for editing
+            return m, nil
 		case tea.KeySpace:
 			return m, m.handleEnter(msg)
 		}
@@ -399,7 +364,7 @@ func (m *Model) viewMenu() string {
 
 	menu := []string{
 		"[↑/↓/←/→] Navigate",
-		"[Enter] Edit",
+        "[Enter] Show",
 		"[Esc] Exit edit",
 		"[r] Reload",
 		"[e] Edit",
@@ -546,6 +511,130 @@ func (m *Model) renderBase(table string) string {
             m.viewMenu(),
         ),
     )
+}
+
+// applyLayout recalculates dynamic sizes based on the current terminal size.
+// It adjusts container width and table heights when the terminal is resized.
+func (m *Model) applyLayout() {
+    // Update base view width
+    m.ViewStyle = m.ViewStyle.Width(m.width)
+
+    // Calculate available height for the table between header, status and menu
+    available := m.height - headerHeight - statusHeight - menuHeight
+    if available < 3 { // keep a reasonable minimum so table remains usable
+        available = 3
+    }
+
+    // Apply height to both tables
+    m.ZonesTable.SetHeight(available)
+    m.RRSetTable.SetHeight(available)
+
+    // Adjust columns to fit current width
+    m.resizeZonesColumns()
+    m.resizeRRSetColumns()
+
+    // Ensure viewport widths are synced
+    m.ZonesTable.SetWidth(m.width)
+    m.RRSetTable.SetWidth(m.width)
+}
+
+// resizeZonesColumns adjusts the zones table columns to fill the available width
+func (m *Model) resizeZonesColumns() {
+    if m.width <= 0 {
+        return
+    }
+    // Account for table cell padding: DefaultStyles adds 1 space left and right per cell
+    // So 2 characters per column must be reserved.
+    available := m.width - 2*2 // 2 columns
+    if available < 20 {
+        available = 20
+    }
+
+    // Two columns: Name (35%) and NS (65%)
+    minName := 12
+    minNS := 10
+    
+    nameW := available * 35 / 100
+    nsW := available - nameW
+    
+    // Ensure minimum widths
+    if nameW < minName {
+        nameW = minName
+        nsW = available - nameW
+    }
+    if nsW < minNS {
+        nsW = minNS
+        nameW = available - nsW
+        if nameW < 8 {
+            nameW = 8
+        }
+    }
+
+    cols := []table.Column{
+        {Title: "Name", Width: nameW},
+        {Title: "NS", Width: nsW},
+    }
+    m.ZonesTable.SetColumns(cols)
+}
+
+// resizeRRSetColumns adjusts the rrset table columns to fill the available width
+// Name column width matches the Name column in ZonesTable for visual consistency
+func (m *Model) resizeRRSetColumns() {
+    if m.width <= 0 {
+        return
+    }
+    // 5 columns => reserve 2 chars of padding per column
+    available := m.width - 2*5
+    if available < 40 {
+        available = 40
+    }
+
+    // Fixed widths for small fields (with minimums)
+    ttlW := 8
+    typeW := 8
+    proxiedW := 10
+    
+    // Get Name width from ZonesTable to match it
+    zonesCols := m.ZonesTable.Columns()
+    nameW := 12 // default minimum
+    if len(zonesCols) > 0 {
+        nameW = zonesCols[0].Width
+    }
+    
+    // Allocate remaining space for Content
+    remaining := available - (nameW + ttlW + typeW + proxiedW)
+    if remaining < 20 {
+        // Adjust fixed widths if terminal is too narrow
+        ttlW = 6
+        typeW = 6
+        proxiedW = 8
+        remaining = available - (nameW + ttlW + typeW + proxiedW)
+    }
+    
+    minContent := 10
+    contentW := remaining
+    if contentW < minContent {
+        // If not enough space, reduce Name width (but keep at least 8)
+        if nameW > 8 {
+            reduce := minContent - contentW
+            if reduce > nameW-8 {
+                reduce = nameW - 8
+            }
+            nameW -= reduce
+            contentW = available - (nameW + ttlW + typeW + proxiedW)
+        } else {
+            contentW = minContent
+        }
+    }
+
+    cols := []table.Column{
+        {Title: "Name", Width: nameW},
+        {Title: "TTL", Width: ttlW},
+        {Title: "Type", Width: typeW},
+        {Title: "Proxied", Width: proxiedW},
+        {Title: "Content", Width: contentW},
+    }
+    m.RRSetTable.SetColumns(cols)
 }
 
 // backgroundViewModel adapts base view to tea.Model for overlay background
