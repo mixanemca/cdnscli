@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/mixanemca/regru-go v0.1.2
+	github.com/mixanemca/regru-go v0.1.4
 	github.com/rmhubbert/bubbletea-overlay v0.4.4
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -66,3 +66,5 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// replace github.com/mixanemca/regru-go => /Users/mbr/git/mixanemca/regru-go
