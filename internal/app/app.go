@@ -30,7 +30,7 @@ import (
 var (
 	// defaultRegistry is the default provider registry with all providers registered.
 	defaultRegistry providers.ProviderRegistry
-	registryOnce     sync.Once
+	registryOnce    sync.Once
 )
 
 // initDefaultRegistry initializes the default registry with all available providers.
@@ -39,6 +39,7 @@ func initDefaultRegistry() {
 		defaultRegistry = providers.NewProviderRegistry()
 		// Register all available providers
 		defaultRegistry.Register(providers.NewCloudflareFactory())
+		defaultRegistry.Register(providers.NewRegRuFactory())
 		// Add more providers here as they are implemented
 		// defaultRegistry.Register(providers.NewRoute53Factory())
 		// defaultRegistry.Register(providers.NewDigitalOceanFactory())
@@ -46,14 +47,14 @@ func initDefaultRegistry() {
 }
 
 type app struct {
-	providers        map[string]providers.Provider
+	providers            map[string]providers.Provider
 	providerDisplayNames map[string]string // Maps provider name to display name
-	defaultProvider  providers.Provider
-	pp               pp.PrettyPrinter
-	output           pp.OutputFormat
-	cfg              *config.Config
-	providerName     string
-	registry         providers.ProviderRegistry
+	defaultProvider      providers.Provider
+	pp                   pp.PrettyPrinter
+	output               pp.OutputFormat
+	cfg                  *config.Config
+	providerName         string
+	registry             providers.ProviderRegistry
 }
 
 // Option options for app
@@ -89,7 +90,7 @@ func New(opts ...Option) (App, error) {
 				return nil, err
 			}
 			a.providers[name] = provider
-			
+
 			// Store display name for the provider
 			providerCfg := a.cfg.Providers[name]
 			displayName := providers.GetDisplayName(providerCfg.Type, providerCfg.DisplayName)

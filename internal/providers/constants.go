@@ -19,11 +19,13 @@ package providers
 // Provider type constants
 const (
 	TypeCloudflare = "cloudflare"
+	TypeRegRu      = "regru"
 )
 
 // DefaultDisplayNames contains default display names for provider types.
 var DefaultDisplayNames = map[string]string{
 	TypeCloudflare: "Cloudflare",
+	TypeRegRu:      "RegRu",
 }
 
 // GetDisplayName returns the display name for a provider type.
@@ -38,4 +40,3 @@ func GetDisplayName(providerType string, customDisplayName string) string {
 	// Fallback to provider type if no default display name is found
 	return providerType
 }
-
