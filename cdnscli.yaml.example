@@ -20,24 +20,43 @@ providers:
     # display-name: Cloudflare  # Optional: custom display name for the provider (defaults to "Cloudflare" for cloudflare type)
     credentials:
       # Option 1: Use API token (recommended)
-      api-token: your-cloudflare-api-token-here
+      api_token: your-cloudflare-api-token-here
       
       # Option 2: Use API key + email (alternative)
-      # api-key: your-api-key
+      # api_key: your-api-key
       # email: your-email@example.com
+
+  regru:
+    type: regru
+    # display-name: RegRu  # Optional: custom display name for the provider (defaults to "RegRu" for regru type)
+    credentials:
+      username: your-regru-username
+      password: your-regru-password
 
 # Example: Multiple Cloudflare accounts
 # providers:
 #   cf-production:
 #     type: cloudflare
 #     credentials:
-#       api-token: production-account-token
+#       api_token: production-account-token
 #   cf-staging:
 #     type: cloudflare
 #     credentials:
-#       api-token: staging-account-token
+#       api_token: staging-account-token
 #   cf-personal:
 #     type: cloudflare
 #     credentials:
-#       api-token: personal-account-token
+#       api_token: personal-account-token
+
+# Example: Multiple providers (Cloudflare and RegRu)
+# providers:
+#   cloudflare:
+#     type: cloudflare
+#     credentials:
+#       api_token: your-cloudflare-api-token
+#   regru:
+#     type: regru
+#     credentials:
+#       username: your-regru-username
+#       password: your-regru-password
 
