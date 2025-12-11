@@ -71,22 +71,40 @@ type CloudflareCredentials struct {
 func (pc *ProviderConfig) GetCloudflareCredentials() (*CloudflareCredentials, error) {
 	creds := &CloudflareCredentials{}
 
-	// Support both api_token and api-token (with dash)
 	if apiToken, ok := pc.Credentials["api_token"].(string); ok {
-		creds.APIToken = apiToken
-	} else if apiToken, ok := pc.Credentials["api-token"].(string); ok {
 		creds.APIToken = apiToken
 	}
 
-	// Support both api_key and api-key (with dash)
 	if apiKey, ok := pc.Credentials["api_key"].(string); ok {
-		creds.APIKey = apiKey
-	} else if apiKey, ok := pc.Credentials["api-key"].(string); ok {
 		creds.APIKey = apiKey
 	}
 
 	if email, ok := pc.Credentials["email"].(string); ok {
 		creds.Email = email
+	}
+
+	return creds, nil
+}
+
+// RegRuCredentials holds RegRu-specific credentials.
+type RegRuCredentials struct {
+	// Username is the RegRu account username
+	Username string `mapstructure:"username" yaml:"username"`
+
+	// Password is the RegRu account password
+	Password string `mapstructure:"password" yaml:"password"`
+}
+
+// GetRegRuCredentials extracts RegRu credentials from provider config.
+func (pc *ProviderConfig) GetRegRuCredentials() (*RegRuCredentials, error) {
+	creds := &RegRuCredentials{}
+
+	if username, ok := pc.Credentials["username"].(string); ok {
+		creds.Username = username
+	}
+
+	if password, ok := pc.Credentials["password"].(string); ok {
+		creds.Password = password
 	}
 
 	return creds, nil
