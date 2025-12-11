@@ -129,7 +129,7 @@ func initConfig() {
 		cfg = &config.Config{
 			ClientTimeout: 10 * time.Second,
 			OutputFormat:  "text",
-			Debug:          false,
+			Debug:         false,
 			Providers:     make(map[string]config.ProviderConfig),
 		}
 	}
@@ -192,6 +192,7 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 
 	m := ui.NewModel()
 	m.ClientTimeout = getTimeout()
+	m.Config = appConfig
 	m.ZonesTable = zonesTable
 	m.RRSetTable = rrsetTable
 	m.TableStyle = tableStyle
@@ -204,4 +205,3 @@ func rootCmdRun(cmd *cobra.Command, args []string) {
 		log.Fatalf("Error running program: %v", err)
 	}
 }
-

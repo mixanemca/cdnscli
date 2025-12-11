@@ -75,9 +75,7 @@ func Load(cfgFile string) (*Config, error) {
 		viper.SetConfigType(DefaultConfigType)
 	}
 
-	// Set environment variable prefix
-	viper.SetEnvPrefix("CDNSCLI")
-	viper.AutomaticEnv() // Read in environment variables that match
+	// Environment variables are not used - only config file
 
 	// Set defaults
 	viper.SetDefault("client_timeout", DefaultClientTimeout)
@@ -98,68 +96,7 @@ func Load(cfgFile string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Load credentials from environment variables if not in config
-	loadCredentialsFromEnv(cfg)
-
 	return cfg, nil
-}
-
-// loadCredentialsFromEnv loads provider credentials from environment variables
-// if they are not already set in the config file.
-func loadCredentialsFromEnv(cfg *Config) {
-	// Cloudflare credentials from environment
-	cloudflareToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	if cloudflareToken != "" {
-		// Check if cloudflare provider exists
-		if _, exists := cfg.Providers["cloudflare"]; !exists {
-			cfg.Providers["cloudflare"] = ProviderConfig{
-				Type:        "cloudflare",
-				Credentials: make(map[string]interface{}),
-				Options:     make(map[string]interface{}),
-			}
-		}
-
-		provider := cfg.Providers["cloudflare"]
-		if provider.Credentials == nil {
-			provider.Credentials = make(map[string]interface{})
-		}
-
-		// Only set if not already configured
-		if _, exists := provider.Credentials["api_token"]; !exists {
-			provider.Credentials["api_token"] = cloudflareToken
-		}
-
-		cfg.Providers["cloudflare"] = provider
-
-		// Set as default if no default is set
-		if cfg.DefaultProvider == "" {
-			cfg.DefaultProvider = "cloudflare"
-		}
-	}
-
-	// Also check CDNSCLI_PROVIDERS_CLOUDFLARE_CREDENTIALS_API_TOKEN
-	envToken := os.Getenv("CDNSCLI_PROVIDERS_CLOUDFLARE_CREDENTIALS_API_TOKEN")
-	if envToken != "" {
-		if _, exists := cfg.Providers["cloudflare"]; !exists {
-			cfg.Providers["cloudflare"] = ProviderConfig{
-				Type:        "cloudflare",
-				Credentials: make(map[string]interface{}),
-				Options:     make(map[string]interface{}),
-			}
-		}
-
-		provider := cfg.Providers["cloudflare"]
-		if provider.Credentials == nil {
-			provider.Credentials = make(map[string]interface{})
-		}
-
-		provider.Credentials["api_token"] = envToken
-		cfg.Providers["cloudflare"] = provider
-
-		if cfg.DefaultProvider == "" {
-			cfg.DefaultProvider = "cloudflare"
-		}
-	}
 }
 
 // GetConfigPath returns the path to the config file that would be used.

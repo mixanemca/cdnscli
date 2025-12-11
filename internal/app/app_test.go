@@ -18,7 +18,6 @@ package app
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/mixanemca/cdnscli/internal/config"
@@ -79,7 +78,7 @@ func TestNew_WithConfig_InvalidProvider(t *testing.T) {
 		DefaultProvider: "non-existent",
 		Providers: map[string]config.ProviderConfig{
 			"non-existent": {
-				Type: "invalid-type",
+				Type:        "invalid-type",
 				Credentials: map[string]interface{}{},
 			},
 		},
@@ -94,20 +93,14 @@ func TestNew_WithConfig_InvalidProvider(t *testing.T) {
 }
 
 func TestNew_WithOutputFormat_NoConfig(t *testing.T) {
-	// Save original env var
-	originalToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	_ = os.Unsetenv("CLOUDFLARE_API_TOKEN")
-	defer func() {
-		_ = os.Setenv("CLOUDFLARE_API_TOKEN", originalToken)
-	}()
-
 	app, err := New(
 		WithOutputFormat(pp.FormatJSON),
 	)
 
-	// Should fail because no config is provided and no env var is set
+	// Should fail because no config is provided
 	assert.Error(t, err)
 	assert.Nil(t, app)
+	assert.Contains(t, err.Error(), "no configuration provided")
 }
 
 func TestNew_WithProvider_InvalidCredentials(t *testing.T) {
@@ -136,34 +129,11 @@ func TestNew_WithProvider_InvalidCredentials(t *testing.T) {
 	assert.True(t, ok1 || ok2, "error should be ProviderCredentialsError or ProviderCreationError, got: %T", err)
 }
 
-func TestNew_NoConfig_NoEnvVar(t *testing.T) {
-	// Save original env var
-	originalToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	_ = os.Unsetenv("CLOUDFLARE_API_TOKEN")
-	defer func() {
-		_ = os.Setenv("CLOUDFLARE_API_TOKEN", originalToken)
-	}()
-
+func TestNew_NoConfig(t *testing.T) {
 	app, err := New()
 	assert.Error(t, err)
 	assert.Nil(t, app)
-	assert.Contains(t, err.Error(), "CLOUDFLARE_API_TOKEN not set")
-}
-
-func TestNew_WithEnvVar_InvalidToken(t *testing.T) {
-	// Save original env var
-	originalToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	defer func() {
-		_ = os.Setenv("CLOUDFLARE_API_TOKEN", originalToken)
-	}()
-
-	// Set invalid token (empty string)
-	_ = os.Setenv("CLOUDFLARE_API_TOKEN", "")
-
-	app, err := New()
-	assert.Error(t, err)
-	assert.Nil(t, app)
-	assert.Contains(t, err.Error(), "CLOUDFLARE_API_TOKEN not set")
+	assert.Contains(t, err.Error(), "no configuration provided")
 }
 
 func TestApp_Provider_NoProviders(t *testing.T) {
@@ -192,7 +162,7 @@ func TestApp_GetProvider_NotFound(t *testing.T) {
 
 func TestApp_GetProvider_EmptyName(t *testing.T) {
 	mockProvider := new(MockProvider)
-	
+
 	// Create app manually
 	a := &app{
 		providers:       make(map[string]providers.Provider),
@@ -208,7 +178,7 @@ func TestApp_GetProvider_EmptyName(t *testing.T) {
 func TestApp_ProviderNames(t *testing.T) {
 	mockProvider1 := new(MockProvider)
 	mockProvider2 := new(MockProvider)
-	
+
 	// Create app manually
 	a := &app{
 		providers: map[string]providers.Provider{
@@ -270,7 +240,7 @@ func TestNew_DefaultProviderFromConfig_NotFound(t *testing.T) {
 func TestWithOutputFormat(t *testing.T) {
 	opt := WithOutputFormat(pp.FormatJSON)
 	assert.NotNil(t, opt)
-	
+
 	// Test that it doesn't error
 	a := &app{}
 	err := opt(a)
@@ -282,7 +252,7 @@ func TestWithConfig(t *testing.T) {
 	cfg := &config.Config{}
 	opt := WithConfig(cfg)
 	assert.NotNil(t, opt)
-	
+
 	a := &app{}
 	err := opt(a)
 	assert.NoError(t, err)
@@ -292,7 +262,7 @@ func TestWithConfig(t *testing.T) {
 func TestWithProvider(t *testing.T) {
 	opt := WithProvider("test-provider")
 	assert.NotNil(t, opt)
-	
+
 	a := &app{}
 	err := opt(a)
 	assert.NoError(t, err)

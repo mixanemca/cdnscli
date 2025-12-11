@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/mixanemca/regru-go v0.1.0
+	github.com/mixanemca/regru-go v0.1.2
 	github.com/rmhubbert/bubbletea-overlay v0.4.4
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0

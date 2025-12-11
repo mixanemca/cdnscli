@@ -19,7 +19,6 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/mixanemca/cdnscli/internal/config"
@@ -116,43 +115,12 @@ func New(opts ...Option) (App, error) {
 			return nil, fmt.Errorf("no providers configured")
 		}
 	} else {
-		// Fallback to environment variable for backward compatibility
-		provider, err := createProviderFromEnv(a.registry)
-		if err != nil {
-			return nil, err
-		}
-		a.defaultProvider = provider
-		providerName := providers.TypeCloudflare
-		a.providers[providerName] = provider
-		// Use default display name for Cloudflare
-		a.providerDisplayNames[providerName] = providers.GetDisplayName(providers.TypeCloudflare, "")
+		return nil, fmt.Errorf("no configuration provided")
 	}
 
 	a.pp = pp.New(pp.OutputFormat(a.output))
 
 	return a, nil
-}
-
-// createProviderFromEnv creates a provider from environment variables (backward compatibility).
-func createProviderFromEnv(registry providers.ProviderRegistry) (providers.Provider, error) {
-	// Check for Cloudflare API token in environment
-	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	if apiToken == "" {
-		return nil, fmt.Errorf("no configuration provided and CLOUDFLARE_API_TOKEN not set")
-	}
-
-	// Create temporary config with Cloudflare provider from env
-	cfg := &config.Config{
-		Providers: make(map[string]config.ProviderConfig),
-	}
-	cfg.Providers[providers.TypeCloudflare] = config.ProviderConfig{
-		Type: providers.TypeCloudflare,
-		Credentials: map[string]interface{}{
-			"api_token": apiToken,
-		},
-	}
-
-	return registry.CreateProvider(providers.TypeCloudflare, cfg)
 }
 
 func (a *app) Provider() providers.Provider {

@@ -29,6 +29,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/config"
 	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/mixanemca/cdnscli/internal/ui/popup"
 	"github.com/mixanemca/cdnscli/internal/ui/theme"
@@ -70,15 +71,18 @@ type (
 	recordCreatedMsg      struct {
 		record models.DNSRecord
 	}
-	recordDeletedMsg      struct {
+	recordDeletedMsg struct {
 		recordName string
 	}
-	recordUpdatedMsg      struct {
+	recordUpdatedMsg struct {
 		recordName string
 	}
 	clearNotificationMsg struct{}
-	showNotificationMsg   struct {
+	showNotificationMsg  struct {
 		message string
+	}
+	errorMsg struct {
+		err error
 	}
 )
 
@@ -94,26 +98,27 @@ type (
 
 // Model represents model for implements bubbletea.Model interface.
 type Model struct {
-	width      int
-	height     int
-	spinner    spinner.Model
-	loading    bool
-	notification string      // текущая нотификация
+	width             int
+	height            int
+	spinner           spinner.Model
+	loading           bool
+	notification      string      // текущая нотификация
 	notificationTimer *time.Timer // таймер для автоматического скрытия
-	current    *table.Model
-	rrsetCache map[string][]models.DNSRecord
+	current           *table.Model
+	rrsetCache        map[string][]models.DNSRecord
 
-    // editing
-    popup      *popup.Model
-	showPopup  bool
-	overlay    *overlay.Model
-	editRow    table.Row
-	editBuffer []string
-	cursor     int
-	creating   bool // флаг создания новой записи
-	deleteCursor int // позиция курсора для удаления (-1 если не в процессе удаления)
+	// editing
+	popup        *popup.Model
+	showPopup    bool
+	overlay      *overlay.Model
+	editRow      table.Row
+	editBuffer   []string
+	cursor       int
+	creating     bool // флаг создания новой записи
+	deleteCursor int  // позиция курсора для удаления (-1 если не в процессе удаления)
 
 	ClientTimeout time.Duration
+	Config        *config.Config
 
 	ZonesTable table.Model
 	RRSetTable table.Model
@@ -133,6 +138,8 @@ func NewModel() *Model {
 	m.spinner.Spinner = spinner.Points
 	m.loading = true
 	m.deleteCursor = -1
+	// Initialize current to ZonesTable to avoid nil pointer dereference
+	m.current = &m.ZonesTable
 
 	return &m
 }
@@ -140,14 +147,33 @@ func NewModel() *Model {
 // Init This command will be executed immediately when the program starts.
 // Implements tea.Model interface.
 func (m *Model) Init() tea.Cmd {
-		return tea.Batch(
+	return tea.Batch(
 		m.spinner.Tick, // Start the spinner
 		func() tea.Msg {
-			a, _ := app.New()
+			var opts []app.Option
+			if m.Config != nil {
+				opts = append(opts, app.WithConfig(m.Config))
+			}
+			a, err := app.New(opts...)
+			if err != nil {
+				// Return error message if app creation fails
+				// Ensure current is set even on error
+				if m.current == nil {
+					m.current = &m.ZonesTable
+				}
+				return errorMsg{err: err}
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 			defer cancel()
 
-			zones, _ := a.Provider().ListZones(ctx)
+			zones, err := a.Provider().ListZones(ctx)
+			if err != nil {
+				// Ensure current is set even on error
+				if m.current == nil {
+					m.current = &m.ZonesTable
+				}
+				return errorMsg{err: err}
+			}
 			providerName := a.DefaultProviderName()
 			rows := []table.Row{}
 			cmds := []tea.Cmd{} // Commands list for async updating
@@ -164,7 +190,10 @@ func (m *Model) Init() tea.Cmd {
 			m.current = &m.ZonesTable
 
 			// Return the command that runs all async updates
-			return tea.Batch(cmds...)()
+			if len(cmds) > 0 {
+				return tea.Batch(cmds...)()
+			}
+			return dataLoadedMsg{}
 		})
 }
 
@@ -172,22 +201,22 @@ func (m *Model) Init() tea.Cmd {
 // rendered after every Update.
 // Implements tea.Model interface.
 func (m *Model) View() string {
-    table := m.viewZones()
+	table := m.viewZones()
 	if m.RRSetTable.Focused() {
 		m.current = &m.RRSetTable
 		table = m.viewRRSet()
 	}
 
-    if m.showPopup {
-        // Render popup window over the base scene using overlay
-        if m.overlay == nil {
-            bg := &backgroundViewModel{parent: m}
-            m.overlay = overlay.New(m.popup, bg, overlay.Center, overlay.Center, 0, 0)
-        }
-        return m.overlay.View()
-    }
+	if m.showPopup {
+		// Render popup window over the base scene using overlay
+		if m.overlay == nil {
+			bg := &backgroundViewModel{parent: m}
+			m.overlay = overlay.New(m.popup, bg, overlay.Center, overlay.Center, 0, 0)
+		}
+		return m.overlay.View()
+	}
 
-    return m.renderBase(table)
+	return m.renderBase(table)
 }
 
 // Update Takes a tea.Msg as input and uses a type switch to handle different types of messages.
@@ -197,11 +226,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	if m.showPopup {
-        updated, cmd := m.popup.Update(msg)
-        if pm, ok := updated.(*popup.Model); ok {
-            m.popup = pm
-        }
-        if !m.popup.IsActive { // Close popup when it becomes inactive
+		updated, cmd := m.popup.Update(msg)
+		if pm, ok := updated.(*popup.Model); ok {
+			m.popup = pm
+		}
+		if !m.popup.IsActive { // Close popup when it becomes inactive
 			m.showPopup = false
 			return m, cmd
 		}
@@ -209,32 +238,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-    // Window size changed: save to reflect new terminal dimensions
+	// Window size changed: save to reflect new terminal dimensions
 	case tea.WindowSizeMsg:
 		m.height = msg.Height
 		m.width = msg.Width
-        m.applyLayout()
+		m.applyLayout()
 
-    // Key pressed
+		// Key pressed
 	case tea.KeyMsg:
 		switch msg.String() {
-        // Toggle focus between zones and records
+		// Toggle focus between zones and records
 		case "esc":
 			if m.showPopup {
 				m.switchTable(rrsetTable)
 				return m, nil
 			}
 			m.switchTable(zonesTable)
-        // Move focus up in the current table
+			// Move focus up in the current table
 		case "up", "k":
-			m.current.MoveUp(1)
-        // Move focus down in the current table
+			if m.current != nil {
+				m.current.MoveUp(1)
+			}
+			// Move focus down in the current table
 		case "down", "j":
-			m.current.MoveDown(1)
-        // Open popup editor for the selected record
+			if m.current != nil {
+				m.current.MoveDown(1)
+			}
+			// Open popup editor for the selected record
 		case "e":
 			// If RRSet is focused, open record editor; if Zones is focused, show NameServers popup
-			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
+			if m.RRSetTable.Focused() && m.current != nil && m.current.Cursor() >= 0 {
 				rows := m.current.Rows()
 				cursor := m.current.Cursor()
 				if cursor < len(rows) {
@@ -270,11 +303,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						nameServers := row[1]
 						m.showPopup = true
 						m.overlay = nil
-					// Build initial list from comma-separated string
-					parts := strings.Split(nameServers, ",")
-					var initial []string
-					for _, p := range parts { if s := strings.TrimSpace(p); s != "" { initial = append(initial, s) } }
-					m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
+						// Build initial list from comma-separated string
+						parts := strings.Split(nameServers, ",")
+						var initial []string
+						for _, p := range parts {
+							if s := strings.TrimSpace(p); s != "" {
+								initial = append(initial, s)
+							}
+						}
+						m.popup = popup.NewNameServersEditor(initial, fmt.Sprintf("Zone: %s — NameServers", zoneName))
 					}
 				}
 			}
@@ -300,7 +337,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Delete record
 		case "d":
 			// If RRSet is focused, show confirmation dialog
-			if m.RRSetTable.Focused() && m.current.Cursor() >= 0 {
+			if m.RRSetTable.Focused() && m.current != nil && m.current.Cursor() >= 0 {
 				rows := m.current.Rows()
 				cursor := m.current.Cursor()
 				if cursor < len(rows) {
@@ -321,14 +358,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-    switch msg.Type {
-    case tea.KeyEnter:
-            // Enter should show records (switch to RRSet) when zones table is focused
-            if m.ZonesTable.Focused() {
-                return m, m.handleEnter(msg)
-            }
-            // In RRSet keep Enter as no-op; use 'e' for editing
-            return m, nil
+		switch msg.Type {
+		case tea.KeyEnter:
+			// Enter should show records (switch to RRSet) when zones table is focused
+			if m.ZonesTable.Focused() {
+				return m, m.handleEnter(msg)
+			}
+			// In RRSet keep Enter as no-op; use 'e' for editing
+			return m, nil
 		case tea.KeySpace:
 			return m, m.handleEnter(msg)
 		}
@@ -337,7 +374,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-    // Custom messages
+		// Custom messages
+	case errorMsg:
+		// Handle error - show notification and stop loading
+		m.loading = false
+		return m, func() tea.Msg {
+			return showNotificationMsg{message: fmt.Sprintf("Error: %v", msg.err)}
+		}
+
 	case dataLoadingMsg:
 		m.loading = true
 		return m, func() tea.Msg { return updateRRSetMsg{} }
@@ -430,8 +474,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchTableToRRSetCmd:
 		m.switchTable(rrsetTable)
 
-    case editRowMsg:
-        // Open editing window
+	case editRowMsg:
+		// Open editing window
 		m.showPopup = true
 		m.editRow = msg.row
 		m.editBuffer = append([]string{}, msg.row...)
@@ -439,24 +483,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case saveRowMsg:
-        // Save changes
+		// Save changes
 		copy(m.editRow, m.editBuffer)
 		m.showPopup = false
 		return m, nil
 
 	case cancelEditMsg:
-        // Cancel editing
+		// Cancel editing
 		m.showPopup = false
 		return m, nil
-    // Handle save and cancel messages from popup
+		// Handle save and cancel messages from popup
 	case popup.SaveActionMsg:
 		if m.creating {
 			// Create new record
 			return m, m.createRRFromFields(msg.Fields)
 		}
 		// Update existing record
-		m.updateTableRow(m.current.Cursor(), msg.Fields)
-		return m, m.updateRRFromFields(msg.Fields)
+		if m.current != nil {
+			m.updateTableRow(m.current.Cursor(), msg.Fields)
+			return m, m.updateRRFromFields(msg.Fields)
+		}
+		return m, nil
 	case popup.SaveNameServersMsg:
 		// Update zones table NameServers column with joined values
 		if m.ZonesTable.Focused() {
@@ -479,7 +526,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.deleteCursor = -1
 	case popup.CancelMsg:
-        // Cancel without persisting changes
+		// Cancel without persisting changes
 		m.popup.IsActive = false
 		m.creating = false
 		m.deleteCursor = -1
@@ -489,7 +536,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 	}
 
-    // If the message type does not match any of the handled cases, return unchanged with no command
+	// If the message type does not match any of the handled cases, return unchanged with no command
 	return m, cmd
 }
 
@@ -594,16 +641,26 @@ func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 // updateRRSet updates resource records set for the given zone name.
 func (m *Model) updateRRSet(zone string) tea.Cmd {
 	return func() tea.Msg {
-		a, _ := app.New()
+		var opts []app.Option
+		if m.Config != nil {
+			opts = append(opts, app.WithConfig(m.Config))
+		}
+		a, err := app.New(opts...)
+		if err != nil {
+			return errorMsg{err: err}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 		defer cancel()
 
-		rrset, _ := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+		rrset, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
 			ZoneName: zone,
 		})
+		if err != nil {
+			return errorMsg{err: err}
+		}
 		m.rrsetCache[zone] = rrset
 
-        // Return a message to indicate that data has been loaded
+		// Return a message to indicate that data has been loaded
 		return dataLoadedMsg{}
 	}
 }
@@ -630,11 +687,14 @@ func boolToCheckMark(b bool) string {
 }
 
 func (m *Model) updateTableRow(index int, newRow table.Row) {
+	if m.current == nil {
+		return
+	}
 	var rrset []models.DNSRecord
 
 	rows := m.current.Rows()
 	if index >= 0 && index < len(rows) {
-        rows[index] = newRow
+		rows[index] = newRow
 		m.current.SetRows(rows) // Переназначаем строки таблице
 		// cache update
 		selectedRow := m.ZonesTable.SelectedRow()
@@ -642,16 +702,16 @@ func (m *Model) updateTableRow(index int, newRow table.Row) {
 			if _, ok := m.rrsetCache[selectedRow[0]]; ok {
 				rrset = m.rrsetCache[selectedRow[0]]
 			}
-            for i := range rrset {
-                if rrset[i].Name == newRow[0] {
-                    rrset[i].TTL, _ = strconv.Atoi(newRow[1])
-                    rrset[i].Type = newRow[2]
-                    // newRow[3] is "true"/"false"; convert to bool
-                    rrset[i].Proxied = strings.ToLower(newRow[3]) == "true"
-                    rrset[i].Content = newRow[4]
-                    break
-                }
-            }
+			for i := range rrset {
+				if rrset[i].Name == newRow[0] {
+					rrset[i].TTL, _ = strconv.Atoi(newRow[1])
+					rrset[i].Type = newRow[2]
+					// newRow[3] is "true"/"false"; convert to bool
+					rrset[i].Proxied = strings.ToLower(newRow[3]) == "true"
+					rrset[i].Content = newRow[4]
+					break
+				}
+			}
 			m.rrsetCache[selectedRow[0]] = rrset
 		}
 	}
@@ -659,321 +719,338 @@ func (m *Model) updateTableRow(index int, newRow table.Row) {
 
 // renderBase renders base UI without overlays
 func (m *Model) renderBase(table string) string {
-    return m.ViewStyle.Render(
-        lipgloss.JoinVertical(lipgloss.Left,
-            m.viewHeader(),
-            table,
-            m.viewStatusBar(),
-            m.viewMenu(),
-        ),
-    )
+	return m.ViewStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			m.viewHeader(),
+			table,
+			m.viewStatusBar(),
+			m.viewMenu(),
+		),
+	)
 }
 
 // applyLayout recalculates dynamic sizes based on the current terminal size.
 // It adjusts container width and table heights when the terminal is resized.
 func (m *Model) applyLayout() {
-    // Update base view width
-    m.ViewStyle = m.ViewStyle.Width(m.width)
+	// Update base view width
+	m.ViewStyle = m.ViewStyle.Width(m.width)
 
-    // Calculate available height for the table between header, status and menu
-    available := m.height - headerHeight - statusHeight - menuHeight
-    if available < 3 { // keep a reasonable minimum so table remains usable
-        available = 3
-    }
+	// Calculate available height for the table between header, status and menu
+	available := m.height - headerHeight - statusHeight - menuHeight
+	if available < 3 { // keep a reasonable minimum so table remains usable
+		available = 3
+	}
 
-    // Apply height to both tables
-    m.ZonesTable.SetHeight(available)
-    m.RRSetTable.SetHeight(available)
+	// Apply height to both tables
+	m.ZonesTable.SetHeight(available)
+	m.RRSetTable.SetHeight(available)
 
-    // Adjust columns to fit current width
-    m.resizeZonesColumns()
-    m.resizeRRSetColumns()
+	// Adjust columns to fit current width
+	m.resizeZonesColumns()
+	m.resizeRRSetColumns()
 
-    // Ensure viewport widths are synced
-    m.ZonesTable.SetWidth(m.width)
-    m.RRSetTable.SetWidth(m.width)
+	// Ensure viewport widths are synced
+	m.ZonesTable.SetWidth(m.width)
+	m.RRSetTable.SetWidth(m.width)
 }
 
 // resizeZonesColumns adjusts the zones table columns to fill the available width
 func (m *Model) resizeZonesColumns() {
-    if m.width <= 0 {
-        return
-    }
-    // Account for table cell padding: DefaultStyles adds 1 space left and right per cell
-    // So 2 characters per column must be reserved.
-    available := m.width - 2*3 // 3 columns
-    if available < 20 {
-        available = 20
-    }
+	if m.width <= 0 {
+		return
+	}
+	// Account for table cell padding: DefaultStyles adds 1 space left and right per cell
+	// So 2 characters per column must be reserved.
+	available := m.width - 2*3 // 3 columns
+	if available < 20 {
+		available = 20
+	}
 
-    // Three columns: Name (35%), NS (50%), Provider (15%)
-    minName := 12
-    minNS := 10
-    minProvider := 8
-    
-    nameW := available * 35 / 100
-    providerW := available * 15 / 100
-    nsW := available - nameW - providerW
-    
-    // Ensure minimum widths
-    if nameW < minName {
-        nameW = minName
-        nsW = available - nameW - providerW
-    }
-    if nsW < minNS {
-        nsW = minNS
-        nameW = available - nsW - providerW
-        if nameW < 8 {
-            nameW = 8
-        }
-    }
-    if providerW < minProvider {
-        providerW = minProvider
-        nsW = available - nameW - providerW
-        if nsW < minNS {
-            nsW = minNS
-            nameW = available - nsW - providerW
-            if nameW < 8 {
-                nameW = 8
-            }
-        }
-    }
+	// Three columns: Name (35%), NS (50%), Provider (15%)
+	minName := 12
+	minNS := 10
+	minProvider := 8
 
-    cols := []table.Column{
-        {Title: "Name", Width: nameW},
-        {Title: "NS", Width: nsW},
-        {Title: "Provider", Width: providerW},
-    }
-    m.ZonesTable.SetColumns(cols)
+	nameW := available * 35 / 100
+	providerW := available * 15 / 100
+	nsW := available - nameW - providerW
+
+	// Ensure minimum widths
+	if nameW < minName {
+		nameW = minName
+		nsW = available - nameW - providerW
+	}
+	if nsW < minNS {
+		nsW = minNS
+		nameW = available - nsW - providerW
+		if nameW < 8 {
+			nameW = 8
+		}
+	}
+	if providerW < minProvider {
+		providerW = minProvider
+		nsW = available - nameW - providerW
+		if nsW < minNS {
+			nsW = minNS
+			nameW = available - nsW - providerW
+			if nameW < 8 {
+				nameW = 8
+			}
+		}
+	}
+
+	cols := []table.Column{
+		{Title: "Name", Width: nameW},
+		{Title: "NS", Width: nsW},
+		{Title: "Provider", Width: providerW},
+	}
+	m.ZonesTable.SetColumns(cols)
 }
 
 // resizeRRSetColumns adjusts the rrset table columns to fill the available width
 // Name column width matches the Name column in ZonesTable for visual consistency
 func (m *Model) resizeRRSetColumns() {
-    if m.width <= 0 {
-        return
-    }
-    // 5 columns => reserve 2 chars of padding per column
-    available := m.width - 2*5
-    if available < 40 {
-        available = 40
-    }
+	if m.width <= 0 {
+		return
+	}
+	// 5 columns => reserve 2 chars of padding per column
+	available := m.width - 2*5
+	if available < 40 {
+		available = 40
+	}
 
-    // Fixed widths for small fields (with minimums)
-    ttlW := 8
-    typeW := 8
-    proxiedW := 10
-    
-    // Get Name width from ZonesTable to match it
-    zonesCols := m.ZonesTable.Columns()
-    nameW := 12 // default minimum
-    if len(zonesCols) > 0 {
-        nameW = zonesCols[0].Width
-    }
-    
-    // Allocate remaining space for Content
-    remaining := available - (nameW + ttlW + typeW + proxiedW)
-    if remaining < 20 {
-        // Adjust fixed widths if terminal is too narrow
-        ttlW = 6
-        typeW = 6
-        proxiedW = 8
-        remaining = available - (nameW + ttlW + typeW + proxiedW)
-    }
-    
-    minContent := 10
-    contentW := remaining
-    if contentW < minContent {
-        // If not enough space, reduce Name width (but keep at least 8)
-        if nameW > 8 {
-            reduce := minContent - contentW
-            if reduce > nameW-8 {
-                reduce = nameW - 8
-            }
-            nameW -= reduce
-            contentW = available - (nameW + ttlW + typeW + proxiedW)
-        } else {
-            contentW = minContent
-        }
-    }
+	// Fixed widths for small fields (with minimums)
+	ttlW := 8
+	typeW := 8
+	proxiedW := 10
 
-    cols := []table.Column{
-        {Title: "Name", Width: nameW},
-        {Title: "TTL", Width: ttlW},
-        {Title: "Type", Width: typeW},
-        {Title: "Proxied", Width: proxiedW},
-        {Title: "Content", Width: contentW},
-    }
-    m.RRSetTable.SetColumns(cols)
+	// Get Name width from ZonesTable to match it
+	zonesCols := m.ZonesTable.Columns()
+	nameW := 12 // default minimum
+	if len(zonesCols) > 0 {
+		nameW = zonesCols[0].Width
+	}
+
+	// Allocate remaining space for Content
+	remaining := available - (nameW + ttlW + typeW + proxiedW)
+	if remaining < 20 {
+		// Adjust fixed widths if terminal is too narrow
+		ttlW = 6
+		typeW = 6
+		proxiedW = 8
+		remaining = available - (nameW + ttlW + typeW + proxiedW)
+	}
+
+	minContent := 10
+	contentW := remaining
+	if contentW < minContent {
+		// If not enough space, reduce Name width (but keep at least 8)
+		if nameW > 8 {
+			reduce := minContent - contentW
+			if reduce > nameW-8 {
+				reduce = nameW - 8
+			}
+			nameW -= reduce
+			contentW = available - (nameW + ttlW + typeW + proxiedW)
+		} else {
+			contentW = minContent
+		}
+	}
+
+	cols := []table.Column{
+		{Title: "Name", Width: nameW},
+		{Title: "TTL", Width: ttlW},
+		{Title: "Type", Width: typeW},
+		{Title: "Proxied", Width: proxiedW},
+		{Title: "Content", Width: contentW},
+	}
+	m.RRSetTable.SetColumns(cols)
 }
 
 // backgroundViewModel adapts base view to tea.Model for overlay background
 type backgroundViewModel struct{ parent *Model }
 
-func (b *backgroundViewModel) Init() tea.Cmd                 { return nil }
+func (b *backgroundViewModel) Init() tea.Cmd                           { return nil }
 func (b *backgroundViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return b, nil }
 func (b *backgroundViewModel) View() string {
-    table := b.parent.viewZones()
-    if b.parent.RRSetTable.Focused() {
-        table = b.parent.viewRRSet()
-    }
-    return b.parent.renderBase(table)
+	table := b.parent.viewZones()
+	if b.parent.RRSetTable.Focused() {
+		table = b.parent.viewRRSet()
+	}
+	return b.parent.renderBase(table)
 }
 
 // updateRRFromFields builds DNSRecord and performs UpdateRR via provider
 func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
-    return func() tea.Msg {
-        a, _ := app.New()
-        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-        defer cancel()
+	return func() tea.Msg {
+		var opts []app.Option
+		if m.Config != nil {
+			opts = append(opts, app.WithConfig(m.Config))
+		}
+		a, err := app.New(opts...)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+		defer cancel()
 
-        // Find selected zone and record by name
-        zoneRow := m.ZonesTable.SelectedRow()
-        if len(zoneRow) == 0 {
-            return nil
-        }
-        zoneName := zoneRow[0]
-        var target models.DNSRecord
-        if rrset, ok := m.rrsetCache[zoneName]; ok {
-            for _, r := range rrset {
-                if r.Name == fields[0] {
-                    target = r
-                    break
-                }
-            }
-        }
+		// Find selected zone and record by name
+		zoneRow := m.ZonesTable.SelectedRow()
+		if len(zoneRow) == 0 {
+			return nil
+		}
+		zoneName := zoneRow[0]
+		var target models.DNSRecord
+		if rrset, ok := m.rrsetCache[zoneName]; ok {
+			for _, r := range rrset {
+				if r.Name == fields[0] {
+					target = r
+					break
+				}
+			}
+		}
 
-        ttl, _ := strconv.Atoi(fields[1])
-        proxied := strings.ToLower(fields[3]) == "true"
+		ttl, _ := strconv.Atoi(fields[1])
+		proxied := strings.ToLower(fields[3]) == "true"
 
-        // Build updated record
-        target.Name = fields[0]
-        target.TTL = ttl
-        target.Type = fields[2]
-        target.Proxied = proxied
-        target.Content = fields[4]
+		// Build updated record
+		target.Name = fields[0]
+		target.TTL = ttl
+		target.Type = fields[2]
+		target.Proxied = proxied
+		target.Content = fields[4]
 
-        // Perform update
-        if _, err := a.Provider().UpdateRR(ctx, zoneName, target); err != nil {
-            // keep UI responsive; could add error handling UI later
-            return nil
-        }
+		// Perform update
+		if _, err := a.Provider().UpdateRR(ctx, zoneName, target); err != nil {
+			return errorMsg{err: err}
+		}
 
-        // Close popup
-        m.popup.IsActive = false
-        m.showPopup = false
-        m.overlay = nil
-        // Show notification
-        return recordUpdatedMsg{recordName: target.Name}
-    }
+		// Close popup
+		m.popup.IsActive = false
+		m.showPopup = false
+		m.overlay = nil
+		// Show notification
+		return recordUpdatedMsg{recordName: target.Name}
+	}
 }
 
 // showNotification displays a notification in the status bar for 3 seconds
 func (m *Model) showNotification(message string) tea.Cmd {
-    // Stop existing timer if any
-    if m.notificationTimer != nil {
-        m.notificationTimer.Stop()
-    }
-    
-    m.notification = message
-    
-    // Create timer to clear notification after 3 seconds
-    m.notificationTimer = time.NewTimer(3 * time.Second)
-    
-    return func() tea.Msg {
-        <-m.notificationTimer.C
-        return clearNotificationMsg{}
-    }
+	// Stop existing timer if any
+	if m.notificationTimer != nil {
+		m.notificationTimer.Stop()
+	}
+
+	m.notification = message
+
+	// Create timer to clear notification after 3 seconds
+	m.notificationTimer = time.NewTimer(3 * time.Second)
+
+	return func() tea.Msg {
+		<-m.notificationTimer.C
+		return clearNotificationMsg{}
+	}
 }
 
 // createRRFromFields builds CreateDNSRecordParams and performs AddRR via provider
 func (m *Model) createRRFromFields(fields []string) tea.Cmd {
-    return func() tea.Msg {
-        a, _ := app.New()
-        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-        defer cancel()
+	return func() tea.Msg {
+		var opts []app.Option
+		if m.Config != nil {
+			opts = append(opts, app.WithConfig(m.Config))
+		}
+		a, err := app.New(opts...)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+		defer cancel()
 
-        // Get selected zone
-        zoneRow := m.ZonesTable.SelectedRow()
-        if len(zoneRow) == 0 {
-            return nil
-        }
-        zoneName := zoneRow[0]
+		// Get selected zone
+		zoneRow := m.ZonesTable.SelectedRow()
+		if len(zoneRow) == 0 {
+			return nil
+		}
+		zoneName := zoneRow[0]
 
-        ttl, _ := strconv.Atoi(fields[1])
-        proxied := strings.ToLower(fields[3]) == "true"
+		ttl, _ := strconv.Atoi(fields[1])
+		proxied := strings.ToLower(fields[3]) == "true"
 
-        // Build create params
-        params := models.CreateDNSRecordParams{
-            Name:     fields[0],
-            TTL:      ttl,
-            Type:     fields[2],
-            Proxied:  proxied,
-            Content:  fields[4],
-            ZoneName: zoneName,
-        }
+		// Build create params
+		params := models.CreateDNSRecordParams{
+			Name:     fields[0],
+			TTL:      ttl,
+			Type:     fields[2],
+			Proxied:  proxied,
+			Content:  fields[4],
+			ZoneName: zoneName,
+		}
 
-        // Perform create
-        newRecord, err := a.Provider().AddRR(ctx, zoneName, params)
-        if err != nil {
-            // keep UI responsive; could add error handling UI later
-            return nil
-        }
+		// Perform create
+		newRecord, err := a.Provider().AddRR(ctx, zoneName, params)
+		if err != nil {
+			return errorMsg{err: err}
+		}
 
 		// Return message to update UI
-        return recordCreatedMsg{record: newRecord}
-    }
+		return recordCreatedMsg{record: newRecord}
+	}
 }
 
 // deleteRR deletes a DNS record via provider
 func (m *Model) deleteRR(cursor int) tea.Cmd {
-    return func() tea.Msg {
-        a, _ := app.New()
-        ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-        defer cancel()
+	return func() tea.Msg {
+		var opts []app.Option
+		if m.Config != nil {
+			opts = append(opts, app.WithConfig(m.Config))
+		}
+		a, err := app.New(opts...)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+		defer cancel()
 
-        // Get selected zone
-        zoneRow := m.ZonesTable.SelectedRow()
-        if len(zoneRow) == 0 {
-            return nil
-        }
-        zoneName := zoneRow[0]
+		// Get selected zone
+		zoneRow := m.ZonesTable.SelectedRow()
+		if len(zoneRow) == 0 {
+			return nil
+		}
+		zoneName := zoneRow[0]
 
-        // Get record from table
-        rows := m.RRSetTable.Rows()
-        if cursor < 0 || cursor >= len(rows) {
-            return nil
-        }
-        row := rows[cursor]
-        if len(row) == 0 {
-            return nil
-        }
-        recordName := row[0]
+		// Get record from table
+		rows := m.RRSetTable.Rows()
+		if cursor < 0 || cursor >= len(rows) {
+			return nil
+		}
+		row := rows[cursor]
+		if len(row) == 0 {
+			return nil
+		}
+		recordName := row[0]
 
-        // Find record in cache to get ID
-        var target models.DNSRecord
-        if rrset, ok := m.rrsetCache[zoneName]; ok {
-            for _, r := range rrset {
-                if r.Name == recordName {
-                    target = r
-                    break
-                }
-            }
-        }
+		// Find record in cache to get ID
+		var target models.DNSRecord
+		if rrset, ok := m.rrsetCache[zoneName]; ok {
+			for _, r := range rrset {
+				if r.Name == recordName {
+					target = r
+					break
+				}
+			}
+		}
 
-        // If record not found in cache, can't delete
-        if target.ID == "" {
-            return nil
-        }
+		// If record not found in cache, can't delete
+		if target.ID == "" {
+			return nil
+		}
 
-        // Perform delete
-        if err := a.Provider().DeleteRR(ctx, zoneName, target); err != nil {
-            // keep UI responsive; could add error handling UI later
-            return nil
-        }
+		// Perform delete
+		if err := a.Provider().DeleteRR(ctx, zoneName, target); err != nil {
+			return errorMsg{err: err}
+		}
 
-        // Return message to update UI
-        return recordDeletedMsg{recordName: recordName}
-    }
+		// Return message to update UI
+		return recordDeletedMsg{recordName: recordName}
+	}
 }
-
