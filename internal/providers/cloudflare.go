@@ -18,6 +18,8 @@ package providers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/mixanemca/cdnscli/internal/models"
@@ -46,6 +48,13 @@ func (p *provider) DeleteRR(ctx context.Context, zone string, rr models.DNSRecor
 	zoneID, err := p.repo.ZoneIDByName(zone)
 	if err != nil {
 		return err
+	}
+
+	if rr.ID == "" {
+		if regRepo, ok := p.repo.(*repoRegRu); ok {
+			return regRepo.deleteDNSRecordByData(ctx, zone, rr)
+		}
+		return fmt.Errorf("required DNS record ID missing")
 	}
 
 	err = p.repo.DeleteDNSRecord(ctx, zoneID, rr.ID)
@@ -90,15 +99,84 @@ func (p *provider) GetRRByName(ctx context.Context, zone, name string) (models.D
 		return rr, err
 	}
 
-	// TODO: this code need to refactoring
+	zoneName := normalizeDNSName(zone)
+	requestedName := normalizeDNSName(name)
+	expectedFQDN := buildFQDN(zoneName, requestedName)
+	hasName := requestedName != ""
+
 	for _, rec := range rrset {
+		if hasName {
+			recName := normalizeDNSName(rec.Name)
+			if recName != requestedName && recName != expectedFQDN {
+				continue
+			}
+		}
+
+		if rec.ID == "" {
+			return rr, fmt.Errorf("required DNS record ID missing")
+		}
+
 		rr, err = p.repo.GetDNSRecord(ctx, zoneID, rec.ID)
 		if err != nil {
 			return rr, err
 		}
+		return rr, nil
 	}
 
-	return rr, nil
+	return rr, fmt.Errorf("record %q not found in zone %q", name, zone)
+}
+
+func normalizeDNSName(value string) string {
+	return strings.TrimSuffix(strings.TrimSpace(value), ".")
+}
+
+func buildFQDN(zone, name string) string {
+	if name == "" {
+		return zone
+	}
+
+	if name == "@" {
+		return zone
+	}
+
+	if strings.HasSuffix(name, "."+zone) || name == zone {
+		return name
+	}
+
+	return strings.Join([]string{name, zone}, ".")
+}
+
+func filterDNSRecords(records []models.DNSRecord, params models.ListDNSRecordsParams) []models.DNSRecord {
+	filtered := make([]models.DNSRecord, 0, len(records))
+	zoneName := normalizeDNSName(params.ZoneName)
+	requestedName := normalizeDNSName(params.Name)
+	expectedFQDN := buildFQDN(zoneName, requestedName)
+	hasName := requestedName != ""
+
+	for _, rec := range records {
+		if params.ID != "" && rec.ID != params.ID {
+			continue
+		}
+		if params.Type != "" && !strings.EqualFold(rec.Type, params.Type) {
+			continue
+		}
+		if params.Content != "" && rec.Content != params.Content {
+			continue
+		}
+		if params.TTL != 0 && rec.TTL != params.TTL {
+			continue
+		}
+		if hasName {
+			recName := normalizeDNSName(rec.Name)
+			if recName != requestedName && recName != expectedFQDN {
+				continue
+			}
+		}
+
+		filtered = append(filtered, rec)
+	}
+
+	return filtered
 }
 
 // ListZones return lists zones on an account.
@@ -139,7 +217,12 @@ func (p *provider) ListRecords(ctx context.Context, params models.ListDNSRecords
 		return []models.DNSRecord{}, err
 	}
 
-	return p.ListRecordsByZoneID(ctx, id, params)
+	rrset, err := p.ListRecordsByZoneID(ctx, id, params)
+	if err != nil {
+		return []models.DNSRecord{}, err
+	}
+
+	return filterDNSRecords(rrset, params), nil
 }
 
 func convFromDNSRecord(cfrr cloudflare.DNSRecord) models.DNSRecord {

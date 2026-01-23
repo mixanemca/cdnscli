@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/mixanemca/cdnscli/internal/app"
+	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -79,17 +80,32 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	rr, err := a.Provider().GetRRByName(ctx, zone, name)
+	params := models.ListDNSRecordsParams{
+		ZoneName: zone,
+		Name:     name,
+		Type:     rrtype,
+		Content:  content,
+	}
+	rrset, err := a.Provider().ListRecords(ctx, params)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	err = a.Provider().DeleteRR(ctx, zone, rr)
+	if len(rrset) == 0 {
+		fmt.Printf("record %q not found in zone %q\n", name, zone)
+		os.Exit(1)
+	}
+	if len(rrset) > 1 {
+		fmt.Printf("found %d matching records for %q in zone %q; refine type/content\n", len(rrset), name, zone)
+		os.Exit(1)
+	}
+
+	err = a.Provider().DeleteRR(ctx, zone, rrset[0])
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	a.Printer().RecordDel(rr)
+	a.Printer().RecordDel(rrset[0])
 }

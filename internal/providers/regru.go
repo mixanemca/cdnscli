@@ -138,6 +138,11 @@ func (r *repoRegRu) DeleteDNSRecord(ctx context.Context, zoneID, recordID string
 	return r.client.DeleteRR(ctx, zoneName, regruRecord)
 }
 
+func (r *repoRegRu) deleteDNSRecordByData(ctx context.Context, zoneName string, rr models.DNSRecord) error {
+	regruRecord := convToRegRuDNSRecord(rr)
+	return r.client.DeleteRR(ctx, zoneName, regruRecord)
+}
+
 func (r *repoRegRu) ListDNSRecords(ctx context.Context, id string) ([]models.DNSRecord, error) {
 	// Get zone name by ID
 	zones, err := r.client.ListZones(ctx)
