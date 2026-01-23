@@ -774,6 +774,7 @@ func TestDeleteDNSRecord(t *testing.T) {
 			zone:   "example.com",
 			zoneID: "12345",
 			mockRecord: models.DNSRecord{
+				ID:      "67890",
 				Name:    "test.example.com",
 				Proxied: true,
 				TTL:     60,
@@ -858,7 +859,6 @@ func TestDeleteDNSRecord(t *testing.T) {
 			zone:   "example.com",
 			zoneID: "12345",
 			mockRecord: models.DNSRecord{
-				ID:      "",
 				Name:    "test.example.com",
 				Proxied: true,
 				TTL:     60,
@@ -875,8 +875,6 @@ func TestDeleteDNSRecord(t *testing.T) {
 
 			mockClient.On("ZoneIDByName", tt.zone).
 				Return(tt.zoneID, nil)
-			mockClient.On("DeleteDNSRecord", mock.Anything, tt.zoneID, tt.mockRecord.ID).
-				Return(tt.expectedErr)
 
 			ctx := context.Background()
 			provider := NewProvider(mockClient)

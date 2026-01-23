@@ -72,7 +72,7 @@ type (
 		record models.DNSRecord
 	}
 	recordDeletedMsg struct {
-		recordName string
+		record models.DNSRecord
 	}
 	recordUpdatedMsg struct {
 		recordName string
@@ -443,7 +443,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Remove from cache
 			if rrset, ok := m.rrsetCache[zoneName]; ok {
 				for i, r := range rrset {
-					if r.Name == msg.recordName {
+					if recordMatches(r, msg.record) {
 						m.rrsetCache[zoneName] = append(rrset[:i], rrset[i+1:]...)
 						break
 					}
@@ -452,7 +452,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Remove from table
 			rows := m.RRSetTable.Rows()
 			for i, row := range rows {
-				if len(row) > 0 && row[0] == msg.recordName {
+				if rowMatchesRecord(row, msg.record) {
 					rows = append(rows[:i], rows[i+1:]...)
 					m.RRSetTable.SetRows(rows)
 					// Adjust cursor if needed
@@ -465,7 +465,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.deleteCursor = -1
 		// Show notification
-		return m, func() tea.Msg { return showNotificationMsg{message: fmt.Sprintf("Record %s deleted", msg.recordName)} }
+		return m, func() tea.Msg { return showNotificationMsg{message: fmt.Sprintf("Record %s deleted", msg.record.Name)} }
 
 	case recordUpdatedMsg:
 		// Show notification for updated record
@@ -684,6 +684,35 @@ func boolToCheckMark(b bool) string {
 		return checkMark
 	}
 	return crossMark
+}
+
+func recordMatches(a, b models.DNSRecord) bool {
+	if a.Name != b.Name || a.Type != b.Type || a.Content != b.Content {
+		return false
+	}
+	if a.TTL != 0 && b.TTL != 0 && a.TTL != b.TTL {
+		return false
+	}
+	if a.Proxied != b.Proxied {
+		return false
+	}
+	return true
+}
+
+func rowMatchesRecord(row table.Row, record models.DNSRecord) bool {
+	if len(row) < 5 {
+		return false
+	}
+	if row[0] != record.Name || row[2] != record.Type || row[4] != record.Content {
+		return false
+	}
+	if record.TTL != 0 && row[1] != strconv.Itoa(record.TTL) {
+		return false
+	}
+	if row[3] != boolToCheckMark(record.Proxied) {
+		return false
+	}
+	return true
 }
 
 func (m *Model) updateTableRow(index int, newRow table.Row) {
@@ -1024,25 +1053,28 @@ func (m *Model) deleteRR(cursor int) tea.Cmd {
 			return nil
 		}
 		row := rows[cursor]
-		if len(row) == 0 {
+		if len(row) < 5 {
 			return nil
 		}
 		recordName := row[0]
+		ttl, _ := strconv.Atoi(row[1])
+		proxied := row[3] == checkMark
+		target := models.DNSRecord{
+			Name:    recordName,
+			TTL:     ttl,
+			Type:    row[2],
+			Proxied: proxied,
+			Content: row[4],
+		}
 
 		// Find record in cache to get ID
-		var target models.DNSRecord
 		if rrset, ok := m.rrsetCache[zoneName]; ok {
 			for _, r := range rrset {
-				if r.Name == recordName {
-					target = r
+				if recordMatches(r, target) {
+					target.ID = r.ID
 					break
 				}
 			}
-		}
-
-		// If record not found in cache, can't delete
-		if target.ID == "" {
-			return nil
 		}
 
 		// Perform delete
@@ -1051,6 +1083,6 @@ func (m *Model) deleteRR(cursor int) tea.Cmd {
 		}
 
 		// Return message to update UI
-		return recordDeletedMsg{recordName: recordName}
+		return recordDeletedMsg{record: target}
 	}
 }
