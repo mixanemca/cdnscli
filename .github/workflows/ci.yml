@@ -12,7 +12,7 @@ jobs:
   test:
     name: Test and Lint
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,8 +37,6 @@ jobs:
 
       - name: Install linting tools
         run: |
-          # Install golangci-lint using the official installer to ensure compatibility
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
           go install honnef.co/go/tools/cmd/staticcheck@latest
           go install github.com/kisielk/errcheck@latest
           go install github.com/mgechev/revive@latest
@@ -46,6 +44,16 @@ jobs:
       - name: Add Go bin to PATH
         run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      - name: Run tests
-        run: make test
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.6
 
+      - name: Run other linters
+        run: |
+          staticcheck ./...
+          errcheck ./...
+          revive -config .revive.toml -formatter friendly ./...
+
+      - name: Run tests
+        run: go test -v -coverprofile=coverage.out github.com/mixanemca/cdnscli/internal/providers && go tool cover -func=coverage.out
