@@ -173,7 +173,16 @@ func (r *repoNamecheap) ListZones(ctx context.Context, z ...string) ([]models.Zo
 		page++
 	}
 
-	return convFromNamecheapDomains(allDomains), nil
+	zones := convFromNamecheapDomains(allDomains)
+
+	for i, zone := range zones {
+		resp, err := r.client.DomainsDNS.GetList(zone.Name)
+		if err == nil && resp.DomainDNSGetListResult != nil && resp.DomainDNSGetListResult.Nameservers != nil {
+			zones[i].NameServers = *resp.DomainDNSGetListResult.Nameservers
+		}
+	}
+
+	return zones, nil
 }
 
 func (r *repoNamecheap) UpdateDNSRecord(ctx context.Context, params models.UpdateDNSRecordParams) (models.DNSRecord, error) {
@@ -329,15 +338,14 @@ func convFromNamecheapHost(h namecheap.DomainsDNSHostRecordDetailed, domain stri
 func convFromNamecheapDomains(domains []namecheap.Domain) []models.Zone {
 	result := make([]models.Zone, 0, len(domains))
 	for _, d := range domains {
-		var id, name string
-		if d.ID != nil {
-			id = *d.ID
-		}
+		var name string
 		if d.Name != nil {
 			name = *d.Name
 		}
+		// Zone ID equals domain name: all DNS operations (getHosts/setHosts) require the domain
+		// name, not Namecheap's internal numeric ID.
 		result = append(result, models.Zone{
-			ID:   id,
+			ID:   name,
 			Name: name,
 		})
 	}

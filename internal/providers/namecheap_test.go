@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/mixanemca/cdnscli/internal/models"
@@ -58,6 +59,34 @@ func multiHandler(responses []string) http.Handler {
 			idx++
 		}
 	})
+}
+
+// commandHandler returns a handler that dispatches by the "Command" POST parameter.
+func commandHandler(routes map[string]string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		q, _ := url.ParseQuery(string(body))
+		if resp, ok := routes[q.Get("Command")]; ok {
+			_, _ = io.WriteString(w, resp)
+		}
+	})
+}
+
+// namecheapXMLDNSGetList returns a DomainsDNS.GetList response with the given nameservers.
+func namecheapXMLDNSGetList(domain string, ns ...string) string {
+	nsXML := ""
+	for _, n := range ns {
+		nsXML += "\n      <Nameserver>" + n + "</Nameserver>"
+	}
+	return `<?xml version="1.0" encoding="utf-8"?>
+<ApiResponse Status="OK" xmlns="http://api.namecheap.com/xml.response">
+  <Errors />
+  <CommandResponse>
+    <DomainDNSGetListResult Domain="` + domain + `" IsUsingOurDNS="true" IsPremiumDNS="false" IsUsingFreeDNS="false">` +
+		nsXML + `
+    </DomainDNSGetListResult>
+  </CommandResponse>
+</ApiResponse>`
 }
 
 // newTestNamecheapClient creates a Namecheap client pointed at the given mock server URL.
@@ -159,8 +188,8 @@ func TestConvFromNamecheapDomains(t *testing.T) {
 	result := convFromNamecheapDomains(domains)
 
 	require.Len(t, result, 2)
-	assert.Equal(t, models.Zone{ID: "111", Name: "example.com"}, result[0])
-	assert.Equal(t, models.Zone{ID: "222", Name: "test.net"}, result[1])
+	assert.Equal(t, models.Zone{ID: "example.com", Name: "example.com"}, result[0])
+	assert.Equal(t, models.Zone{ID: "test.net", Name: "test.net"}, result[1])
 }
 
 func TestConvFromNamecheapDomains_Empty(t *testing.T) {
@@ -210,15 +239,18 @@ func TestConvParamsToNamecheapHost_Root(t *testing.T) {
 // --- Repo: ListZones ---
 
 func TestRepoNamecheap_ListZones(t *testing.T) {
-	fakeResponse := namecheapXMLResponse(`
+	domainsResponse := namecheapXMLResponse(`
 <DomainGetListResult>
   <Domain ID="101" Name="example.com" User="testuser" IsExpired="false" IsLocked="false" AutoRenew="true" WhoisGuard="ENABLED" IsPremium="false" IsOurDNS="true" />
   <Domain ID="102" Name="test.net" User="testuser" IsExpired="false" IsLocked="false" AutoRenew="false" WhoisGuard="NOTPRESENT" IsPremium="false" IsOurDNS="true" />
 </DomainGetListResult>
 <Paging><TotalItems>2</TotalItems><CurrentPage>1</CurrentPage><PageSize>20</PageSize></Paging>`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, fakeResponse)
+	dnsListResponse := namecheapXMLDNSGetList("example.com", "dns1.namecheaphosting.com", "dns2.namecheaphosting.com")
+
+	server := httptest.NewServer(commandHandler(map[string]string{
+		"namecheap.domains.getList":     domainsResponse,
+		"namecheap.domains.dns.getList": dnsListResponse,
 	}))
 	defer server.Close()
 
@@ -227,19 +259,20 @@ func TestRepoNamecheap_ListZones(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, zones, 2)
-	assert.Equal(t, "101", zones[0].ID)
+	assert.Equal(t, "example.com", zones[0].ID)
 	assert.Equal(t, "example.com", zones[0].Name)
-	assert.Equal(t, "102", zones[1].ID)
+	assert.Equal(t, "test.net", zones[1].ID)
 	assert.Equal(t, "test.net", zones[1].Name)
+	assert.NotEmpty(t, zones[0].NameServers)
 }
 
 func TestRepoNamecheap_ListZones_Empty(t *testing.T) {
-	fakeResponse := namecheapXMLResponse(`
+	domainsResponse := namecheapXMLResponse(`
 <DomainGetListResult />
 <Paging><TotalItems>0</TotalItems><CurrentPage>1</CurrentPage><PageSize>20</PageSize></Paging>`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, fakeResponse)
+	server := httptest.NewServer(commandHandler(map[string]string{
+		"namecheap.domains.getList": domainsResponse,
 	}))
 	defer server.Close()
 
@@ -376,14 +409,15 @@ func TestRepoNamecheap_DeleteDNSRecord_NotFound(t *testing.T) {
 // --- Repo: ZoneIDByName ---
 
 func TestRepoNamecheap_ZoneIDByName_Found(t *testing.T) {
-	fakeResponse := namecheapXMLResponse(`
+	domainsResponse := namecheapXMLResponse(`
 <DomainGetListResult>
   <Domain ID="501" Name="example.com" User="testuser" IsExpired="false" IsLocked="false" AutoRenew="true" WhoisGuard="ENABLED" IsPremium="false" IsOurDNS="true" />
 </DomainGetListResult>
 <Paging><TotalItems>1</TotalItems><CurrentPage>1</CurrentPage><PageSize>20</PageSize></Paging>`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, fakeResponse)
+	server := httptest.NewServer(commandHandler(map[string]string{
+		"namecheap.domains.getList":     domainsResponse,
+		"namecheap.domains.dns.getList": namecheapXMLDNSGetList("example.com"),
 	}))
 	defer server.Close()
 
@@ -391,7 +425,7 @@ func TestRepoNamecheap_ZoneIDByName_Found(t *testing.T) {
 	id, err := repo.ZoneIDByName("example.com")
 
 	require.NoError(t, err)
-	assert.Equal(t, "501", id)
+	assert.Equal(t, "example.com", id)
 }
 
 func TestRepoNamecheap_ZoneIDByName_NotFound(t *testing.T) {
@@ -520,13 +554,14 @@ func TestRepoNamecheap_ListZones_APIError(t *testing.T) {
 
 func TestRepoNamecheap_ListZones_NilPaging(t *testing.T) {
 	// No <Paging> element → resp.Paging == nil → break immediately
-	fakeResponse := namecheapXMLResponse(`
+	domainsResponse := namecheapXMLResponse(`
 <DomainGetListResult>
   <Domain ID="201" Name="example.com" User="testuser" IsExpired="false" IsLocked="false" AutoRenew="true" WhoisGuard="ENABLED" IsPremium="false" IsOurDNS="true" />
 </DomainGetListResult>`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, fakeResponse)
+	server := httptest.NewServer(commandHandler(map[string]string{
+		"namecheap.domains.getList":     domainsResponse,
+		"namecheap.domains.dns.getList": namecheapXMLDNSGetList("example.com"),
 	}))
 	defer server.Close()
 
@@ -539,14 +574,15 @@ func TestRepoNamecheap_ListZones_NilPaging(t *testing.T) {
 }
 
 func TestRepoNamecheap_ListZones_WithFilter(t *testing.T) {
-	fakeResponse := namecheapXMLResponse(`
+	domainsResponse := namecheapXMLResponse(`
 <DomainGetListResult>
   <Domain ID="301" Name="example.com" User="testuser" IsExpired="false" IsLocked="false" AutoRenew="true" WhoisGuard="ENABLED" IsPremium="false" IsOurDNS="true" />
 </DomainGetListResult>
 <Paging><TotalItems>1</TotalItems><CurrentPage>1</CurrentPage><PageSize>100</PageSize></Paging>`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, fakeResponse)
+	server := httptest.NewServer(commandHandler(map[string]string{
+		"namecheap.domains.getList":     domainsResponse,
+		"namecheap.domains.dns.getList": namecheapXMLDNSGetList("example.com"),
 	}))
 	defer server.Close()
 
