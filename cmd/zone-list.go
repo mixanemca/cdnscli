@@ -48,7 +48,7 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -68,7 +68,7 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 			zones, err = p.ListZones(ctx)
 		}
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		displayName := a.ProviderDisplayName(pName)

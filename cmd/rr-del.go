@@ -65,7 +65,7 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -79,7 +79,7 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 
 	p, err := a.ProviderForZone(zone)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -94,7 +94,7 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 	}
 	rrset, err := p.ListRecords(ctx, params)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -109,7 +109,7 @@ func rrDelCmdRun(cmd *cobra.Command, args []string) {
 
 	err = p.DeleteRR(ctx, zone, rrset[0])
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 

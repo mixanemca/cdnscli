@@ -67,7 +67,7 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -92,7 +92,7 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 
 	p, err := a.ProviderForZone(zone)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -101,7 +101,7 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 
 	rr, err := p.AddRR(ctx, zone, params)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 

@@ -26,6 +26,8 @@ import (
 	namecheap "github.com/namecheap/go-namecheap-sdk/v2/namecheap"
 )
 
+const namecheapListZonesPageSize = 100
+
 type repoNamecheap struct {
 	client *namecheap.Client
 }
@@ -51,9 +53,9 @@ func (r *repoNamecheap) GetDNSRecord(ctx context.Context, zoneID, recordID strin
 }
 
 func (r *repoNamecheap) CreateDNSRecord(ctx context.Context, params models.CreateDNSRecordParams) (models.DNSRecord, error) {
-	domain := params.ZoneName
+	domain := strings.TrimSpace(params.ZoneName)
 	if domain == "" {
-		domain = params.ZoneID
+		domain = strings.TrimSpace(params.ZoneID)
 	}
 	if domain == "" {
 		return models.DNSRecord{}, fmt.Errorf("zone name or zone ID must be provided")
@@ -139,7 +141,7 @@ func (r *repoNamecheap) ListDNSRecords(ctx context.Context, id string) ([]models
 }
 
 func (r *repoNamecheap) ListZones(ctx context.Context, z ...string) ([]models.Zone, error) {
-	pageSize := 100
+	pageSize := namecheapListZonesPageSize
 	page := 1
 	var allDomains []namecheap.Domain
 
@@ -186,9 +188,9 @@ func (r *repoNamecheap) ListZones(ctx context.Context, z ...string) ([]models.Zo
 }
 
 func (r *repoNamecheap) UpdateDNSRecord(ctx context.Context, params models.UpdateDNSRecordParams) (models.DNSRecord, error) {
-	domain := params.ZoneName
+	domain := strings.TrimSpace(params.ZoneName)
 	if domain == "" {
-		domain = params.ZoneID
+		domain = strings.TrimSpace(params.ZoneID)
 	}
 	if domain == "" {
 		return models.DNSRecord{}, fmt.Errorf("zone name or zone ID must be provided")

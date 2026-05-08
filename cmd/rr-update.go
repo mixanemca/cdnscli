@@ -65,13 +65,13 @@ func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 		app.WithOutputFormat(outputFormat),
 	)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
 	p, err := a.ProviderForZone(zone)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
@@ -80,7 +80,7 @@ func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 
 	rr, err := p.GetRRByName(ctx, zone, name)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	rr.Content = content
