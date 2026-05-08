@@ -168,7 +168,8 @@ func filterDNSRecords(records []models.DNSRecord, params models.ListDNSRecordsPa
 		}
 		if hasName {
 			recName := normalizeDNSName(rec.Name)
-			if recName != requestedName && recName != expectedFQDN {
+			relativeRequested := strings.TrimSuffix(requestedName, "."+zoneName)
+			if recName != requestedName && recName != expectedFQDN && recName != relativeRequested {
 				continue
 			}
 		}

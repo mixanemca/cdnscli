@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/mixanemca/cdnscli/internal/models"
@@ -51,7 +50,7 @@ func init() {
 
 func searchCmdRun(cmd *cobra.Command, args []string) {
 	if len(content) == 0 && len(name) == 0 && len(rrtype) == 0 {
-		fmt.Println("ERROR: you must specify one of the search parameters - content, name or type")
+		fmt.Fprintln(os.Stderr, "ERROR: you must specify one of the search parameters - content, name or type")
 		os.Exit(1)
 	}
 
@@ -64,14 +63,16 @@ func searchCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	p, err := a.ProviderForZone(zone)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	if len(name) > 0 {
-		name = strings.Join([]string{name, zone}, ".")
-	}
-
-	results, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+	results, err := p.ListRecords(ctx, models.ListDNSRecordsParams{
 		Content:  content,
 		Name:     name,
 		Type:     rrtype,
