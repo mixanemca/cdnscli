@@ -70,6 +70,12 @@ type (
 	dataLoadedMsg         struct{}
 	dataLoadingMsg        struct{}
 	updateRRSetMsg        struct{}
+	providerNamesMsg      struct{ names []string }
+	zonesFromProviderMsg  struct {
+		rows         []table.Row
+		zoneProvider map[string]string
+		rrCmds       []tea.Cmd
+	}
 	recordCreatedMsg      struct {
 		record models.DNSRecord
 	}
@@ -119,7 +125,8 @@ type Model struct {
 	creating     bool // флаг создания новой записи
 	deleteCursor int  // позиция курсора для удаления (-1 если не в процессе удаления)
 
-	zoneProviderMap map[string]string // zone name → provider config key
+	zoneProviderMap  map[string]string // zone name → provider config key
+	loadingProviders int               // number of providers still loading zones
 
 	ClientTimeout time.Duration
 	Config        *config.Config
@@ -153,7 +160,7 @@ func NewModel() *Model {
 // Implements tea.Model interface.
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		m.spinner.Tick, // Start the spinner
+		m.spinner.Tick,
 		func() tea.Msg {
 			var opts []app.Option
 			if m.Config != nil {
@@ -161,52 +168,60 @@ func (m *Model) Init() tea.Cmd {
 			}
 			a, err := app.New(opts...)
 			if err != nil {
-				// Return error message if app creation fails
-				// Ensure current is set even on error
 				if m.current == nil {
 					m.current = &m.ZonesTable
 				}
 				return errorMsg{err: err}
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
-			defer cancel()
+			return providerNamesMsg{names: a.ProviderNames()}
+		},
+	)
+}
 
-			rows := []table.Row{}
-			cmds := []tea.Cmd{}
+// loadZonesFromProvider fetches zones from a single provider and returns them as a message.
+func (m *Model) loadZonesFromProvider(providerName string) tea.Cmd {
+	return func() tea.Msg {
+		var opts []app.Option
+		if m.Config != nil {
+			opts = append(opts, app.WithConfig(m.Config))
+		}
+		a, err := app.New(opts...)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		p, err := a.GetProvider(providerName)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
+		defer cancel()
 
-			for _, name := range a.ProviderNames() {
-				p, err := a.GetProvider(name)
-				if err != nil {
-					continue
-				}
-				displayName := a.ProviderDisplayName(name)
-				zones, err := p.ListZones(ctx)
-				if err != nil {
-					if m.current == nil {
-						m.current = &m.ZonesTable
-					}
-					return errorMsg{err: err}
-				}
-				for _, zone := range zones {
-					m.zoneProviderMap[zone.Name] = name
-					rows = append(rows, table.Row{
-						zone.Name,
-						strings.Join(zone.NameServers, ", "),
-						displayName,
-					})
-					cmds = append(cmds, m.updateRRSet(zone.Name))
-				}
-			}
-			sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
-			m.ZonesTable.SetRows(rows)
-			m.current = &m.ZonesTable
+		zones, err := p.ListZones(ctx)
+		if err != nil {
+			return errorMsg{err: err}
+		}
 
-			// Return the command that runs all async updates
-			if len(cmds) > 0 {
-				return tea.Batch(cmds...)()
-			}
-			return dataLoadedMsg{}
-		})
+		displayName := a.ProviderDisplayName(providerName)
+		zoneProvider := make(map[string]string, len(zones))
+		rows := make([]table.Row, 0, len(zones))
+		rrCmds := make([]tea.Cmd, 0, len(zones))
+
+		for _, zone := range zones {
+			zoneProvider[zone.Name] = providerName
+			rows = append(rows, table.Row{
+				zone.Name,
+				strings.Join(zone.NameServers, ", "),
+				displayName,
+			})
+			rrCmds = append(rrCmds, m.updateRRSet(zone.Name))
+		}
+
+		return zonesFromProviderMsg{
+			rows:         rows,
+			zoneProvider: zoneProvider,
+			rrCmds:       rrCmds,
+		}
+	}
 }
 
 // View renders the program's UI, which is just a string. The view is
@@ -402,9 +417,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		zone := m.ZonesTable.SelectedRow()
 		return m, m.updateRRSet(zone[0])
 
+	case providerNamesMsg:
+		m.loadingProviders = len(msg.names)
+		if m.loadingProviders == 0 {
+			m.loading = false
+			return m, nil
+		}
+		cmds := make([]tea.Cmd, 0, len(msg.names))
+		for _, name := range msg.names {
+			cmds = append(cmds, m.loadZonesFromProvider(name))
+		}
+		return m, tea.Batch(cmds...)
+
+	case zonesFromProviderMsg:
+		for k, v := range msg.zoneProvider {
+			m.zoneProviderMap[k] = v
+		}
+		existing := m.ZonesTable.Rows()
+		all := append(existing, msg.rows...)
+		sort.Slice(all, func(i, j int) bool { return all[i][0] < all[j][0] })
+		m.ZonesTable.SetRows(all)
+		m.current = &m.ZonesTable
+		m.loadingProviders--
+		if m.loadingProviders <= 0 {
+			m.loading = false
+		}
+		if len(msg.rrCmds) > 0 {
+			return m, tea.Batch(msg.rrCmds...)
+		}
+		return m, nil
+
 	case dataLoadedMsg:
-		m.loading = false
-		return m, nil // stop spinner
+		return m, nil
 
 	case showNotificationMsg:
 		return m, m.showNotification(msg.message)
