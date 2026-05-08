@@ -18,8 +18,9 @@ package models
 
 // Zone describes a DNS zone.
 type Zone struct {
-	ID          string   `json:"id,omitempty"`
-	Name        string   `json:"name,omitempty"`
-	NameServers []string `json:"name_servers,omitempty"`
-	Status      string   `json:"status,omitempty"`
+	ID           string   `json:"id,omitempty"`
+	Name         string   `json:"name,omitempty"`
+	NameServers  []string `json:"name_servers,omitempty"`
+	Status       string   `json:"status,omitempty"`
+	ProviderName string   `json:"provider,omitempty"`
 }

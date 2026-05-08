@@ -27,7 +27,7 @@ import (
 type TextPrinter struct{}
 
 // ZonesList prints list of DNS zones.
-func (pp *TextPrinter) ZonesList(zones []models.Zone, providerName string) {
+func (pp *TextPrinter) ZonesList(zones []models.Zone) {
 	if len(zones) == 0 {
 		fmt.Println("No zones found")
 		return
@@ -54,8 +54,8 @@ func (pp *TextPrinter) ZonesList(zones []models.Zone, providerName string) {
 		if len(z.Status) > maxStatusLen {
 			maxStatusLen = len(z.Status)
 		}
-		if len(providerName) > maxProviderLen {
-			maxProviderLen = len(providerName)
+		if len(z.ProviderName) > maxProviderLen {
+			maxProviderLen = len(z.ProviderName)
 		}
 	}
 
@@ -80,7 +80,7 @@ func (pp *TextPrinter) ZonesList(zones []models.Zone, providerName string) {
 			maxNameLen, z.Name,
 			maxNSLen, nsStr,
 			maxStatusLen, z.Status,
-			maxProviderLen, providerName)
+			maxProviderLen, z.ProviderName)
 		fmt.Print(row)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/mixanemca/cdnscli/internal/models"
@@ -54,17 +55,29 @@ func zoneListRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	var zones []models.Zone
-	if len(name) > 0 {
-		zones, err = a.Provider().ListZonesByName(ctx, name)
-	} else {
-		zones, err = a.Provider().ListZones(ctx)
-	}
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	var allZones []models.Zone
+	for _, pName := range a.ProviderNames() {
+		p, err := a.GetProvider(pName)
+		if err != nil {
+			continue
+		}
+		var zones []models.Zone
+		if len(name) > 0 {
+			zones, err = p.ListZonesByName(ctx, name)
+		} else {
+			zones, err = p.ListZones(ctx)
+		}
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		displayName := a.ProviderDisplayName(pName)
+		for i := range zones {
+			zones[i].ProviderName = displayName
+		}
+		allZones = append(allZones, zones...)
 	}
 
-	providerName := a.DefaultProviderName()
-	a.Printer().ZonesList(zones, providerName)
+	sort.Slice(allZones, func(i, j int) bool { return allZones[i].Name < allZones[j].Name })
+	a.Printer().ZonesList(allZones)
 }
