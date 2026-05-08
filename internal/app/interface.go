@@ -32,6 +32,8 @@ type App interface {
 	ProviderNames() []string
 	// DefaultProviderName returns the name of the default provider.
 	DefaultProviderName() string
+	// ProviderDisplayName returns the display name for the given provider config key.
+	ProviderDisplayName(name string) string
 	// Printer returns a specialized API for pretty printing.
 	Printer() prettyprint.PrettyPrinter
 }

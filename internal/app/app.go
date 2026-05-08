@@ -149,6 +149,13 @@ func (a *app) ProviderNames() []string {
 	return names
 }
 
+func (a *app) ProviderDisplayName(name string) string {
+	if displayName, ok := a.providerDisplayNames[name]; ok {
+		return displayName
+	}
+	return name
+}
+
 func (a *app) DefaultProviderName() string {
 	// Find the provider name that matches the default provider
 	for name, provider := range a.providers {

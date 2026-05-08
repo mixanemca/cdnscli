@@ -31,6 +31,7 @@ import (
 	"github.com/mixanemca/cdnscli/internal/app"
 	"github.com/mixanemca/cdnscli/internal/config"
 	"github.com/mixanemca/cdnscli/internal/models"
+	"github.com/mixanemca/cdnscli/internal/providers"
 	"github.com/mixanemca/cdnscli/internal/ui/popup"
 	"github.com/mixanemca/cdnscli/internal/ui/theme"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
@@ -117,6 +118,8 @@ type Model struct {
 	creating     bool // флаг создания новой записи
 	deleteCursor int  // позиция курсора для удаления (-1 если не в процессе удаления)
 
+	zoneProviderMap map[string]string // zone name → provider config key
+
 	ClientTimeout time.Duration
 	Config        *config.Config
 
@@ -131,6 +134,7 @@ func NewModel() *Model {
 	var m Model
 
 	m.rrsetCache = make(map[string][]models.DNSRecord)
+	m.zoneProviderMap = make(map[string]string)
 	m.ViewStyle = lipgloss.NewStyle().
 		Padding(0, 0).
 		Width(m.width)
@@ -166,25 +170,31 @@ func (m *Model) Init() tea.Cmd {
 			ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 			defer cancel()
 
-			zones, err := a.Provider().ListZones(ctx)
-			if err != nil {
-				// Ensure current is set even on error
-				if m.current == nil {
-					m.current = &m.ZonesTable
-				}
-				return errorMsg{err: err}
-			}
-			providerName := a.DefaultProviderName()
 			rows := []table.Row{}
-			cmds := []tea.Cmd{} // Commands list for async updating
+			cmds := []tea.Cmd{}
 
-			for _, zone := range zones {
-				rows = append(rows, table.Row{
-					zone.Name,
-					strings.Join(zone.NameServers, ", "),
-					providerName,
-				})
-				cmds = append(cmds, m.updateRRSet(zone.Name))
+			for _, name := range a.ProviderNames() {
+				p, err := a.GetProvider(name)
+				if err != nil {
+					continue
+				}
+				displayName := a.ProviderDisplayName(name)
+				zones, err := p.ListZones(ctx)
+				if err != nil {
+					if m.current == nil {
+						m.current = &m.ZonesTable
+					}
+					return errorMsg{err: err}
+				}
+				for _, zone := range zones {
+					m.zoneProviderMap[zone.Name] = name
+					rows = append(rows, table.Row{
+						zone.Name,
+						strings.Join(zone.NameServers, ", "),
+						displayName,
+					})
+					cmds = append(cmds, m.updateRRSet(zone.Name))
+				}
 			}
 			m.ZonesTable.SetRows(rows)
 			m.current = &m.ZonesTable
@@ -638,6 +648,17 @@ func (m *Model) handleEnter(tea.Msg) tea.Cmd {
 	}
 }
 
+// providerForZone returns the correct provider for the given zone name.
+// Falls back to the default provider if the zone is not in the map.
+func (m *Model) providerForZone(a app.App, zoneName string) providers.Provider {
+	if pName, ok := m.zoneProviderMap[zoneName]; ok {
+		if p, err := a.GetProvider(pName); err == nil {
+			return p
+		}
+	}
+	return a.Provider()
+}
+
 // updateRRSet updates resource records set for the given zone name.
 func (m *Model) updateRRSet(zone string) tea.Cmd {
 	return func() tea.Msg {
@@ -652,7 +673,7 @@ func (m *Model) updateRRSet(zone string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), m.ClientTimeout)
 		defer cancel()
 
-		rrset, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+		rrset, err := m.providerForZone(a, zone).ListRecords(ctx, models.ListDNSRecordsParams{
 			ZoneName: zone,
 		})
 		if err != nil {
@@ -950,7 +971,7 @@ func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
 		target.Content = fields[4]
 
 		// Perform update
-		if _, err := a.Provider().UpdateRR(ctx, zoneName, target); err != nil {
+		if _, err := m.providerForZone(a, zoneName).UpdateRR(ctx, zoneName, target); err != nil {
 			return errorMsg{err: err}
 		}
 
@@ -1016,7 +1037,7 @@ func (m *Model) createRRFromFields(fields []string) tea.Cmd {
 		}
 
 		// Perform create
-		newRecord, err := a.Provider().AddRR(ctx, zoneName, params)
+		newRecord, err := m.providerForZone(a, zoneName).AddRR(ctx, zoneName, params)
 		if err != nil {
 			return errorMsg{err: err}
 		}
@@ -1078,7 +1099,7 @@ func (m *Model) deleteRR(cursor int) tea.Cmd {
 		}
 
 		// Perform delete
-		if err := a.Provider().DeleteRR(ctx, zoneName, target); err != nil {
+		if err := m.providerForZone(a, zoneName).DeleteRR(ctx, zoneName, target); err != nil {
 			return errorMsg{err: err}
 		}
 
