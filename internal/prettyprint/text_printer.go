@@ -89,12 +89,12 @@ func (pp *TextPrinter) ZonesList(zones []models.Zone, providerName string) {
 func (pp *TextPrinter) RecordsList(rrset []models.DNSRecord) {
 	var fields strings.Builder
 	for _, rr := range rrset {
-		fields.WriteString(fmt.Sprintf("ID: %s\n", rr.ID))
-		fields.WriteString(fmt.Sprintf("Name: %s\n", rr.Name))
-		fields.WriteString(fmt.Sprintf("TTL: %d\n", rr.TTL))
-		fields.WriteString(fmt.Sprintf("Type: %s\n", rr.Type))
-		fields.WriteString(fmt.Sprintf("Proxied: %t\n", rr.Proxied))
-		fields.WriteString(fmt.Sprintf("Content: %s\n", rr.Content))
+		fmt.Fprintf(&fields, "ID: %s\n", rr.ID)
+		fmt.Fprintf(&fields, "Name: %s\n", rr.Name)
+		fmt.Fprintf(&fields, "TTL: %d\n", rr.TTL)
+		fmt.Fprintf(&fields, "Type: %s\n", rr.Type)
+		fmt.Fprintf(&fields, "Proxied: %t\n", rr.Proxied)
+		fmt.Fprintf(&fields, "Content: %s\n", rr.Content)
 	}
 	fmt.Print(fields.String())
 }
@@ -103,12 +103,12 @@ func (pp *TextPrinter) RecordsList(rrset []models.DNSRecord) {
 func (pp *TextPrinter) RecordInfo(rr models.DNSRecord) {
 	var fields strings.Builder
 
-	fields.WriteString(fmt.Sprintf("ID: %s\n", rr.ID))
-	fields.WriteString(fmt.Sprintf("Name: %s\n", rr.Name))
-	fields.WriteString(fmt.Sprintf("TTL: %d\n", rr.TTL))
-	fields.WriteString(fmt.Sprintf("Type: %s\n", rr.Type))
-	fields.WriteString(fmt.Sprintf("Proxied: %t\n", rr.Proxied))
-	fields.WriteString(fmt.Sprintf("Content: %s\n", rr.Content))
+	fmt.Fprintf(&fields, "ID: %s\n", rr.ID)
+	fmt.Fprintf(&fields, "Name: %s\n", rr.Name)
+	fmt.Fprintf(&fields, "TTL: %d\n", rr.TTL)
+	fmt.Fprintf(&fields, "Type: %s\n", rr.Type)
+	fmt.Fprintf(&fields, "Proxied: %t\n", rr.Proxied)
+	fmt.Fprintf(&fields, "Content: %s\n", rr.Content)
 
 	fmt.Print(fields.String())
 
@@ -118,10 +118,10 @@ func (pp *TextPrinter) RecordInfo(rr models.DNSRecord) {
 func (pp *TextPrinter) RecordAdd(rr models.DNSRecord) {
 	var fields strings.Builder
 
-	fields.WriteString(fmt.Sprintf("New resource record %q was been added with ID %q\n",
+	fmt.Fprintf(&fields, "New resource record %q was been added with ID %q\n",
 		rr.Name,
 		rr.ID,
-	))
+	)
 
 	fmt.Print(fields.String())
 }
