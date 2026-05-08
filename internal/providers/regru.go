@@ -189,7 +189,21 @@ func (r *repoRegRu) ListZones(ctx context.Context, z ...string) ([]models.Zone, 
 		return []models.Zone{}, err
 	}
 
-	return convFromRegRuZones(zones), nil
+	result := convFromRegRuZones(zones)
+
+	for i, zone := range result {
+		nsRecords, nsErr := r.client.ListRecords(ctx, regru.ListDNSRecordsParams{
+			ZoneName: zone.Name,
+			Type:     "NS",
+		})
+		if nsErr == nil {
+			for _, rec := range nsRecords {
+				result[i].NameServers = append(result[i].NameServers, rec.Content)
+			}
+		}
+	}
+
+	return result, nil
 }
 
 func (r *repoRegRu) UpdateDNSRecord(ctx context.Context, params models.UpdateDNSRecordParams) (models.DNSRecord, error) {
