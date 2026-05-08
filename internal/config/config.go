@@ -109,3 +109,41 @@ func (pc *ProviderConfig) GetRegRuCredentials() (*RegRuCredentials, error) {
 
 	return creds, nil
 }
+
+// NamecheapCredentials holds Namecheap-specific credentials.
+type NamecheapCredentials struct {
+	// APIUser is the Namecheap account username used for API calls
+	APIUser string `mapstructure:"api_user" yaml:"api_user"`
+
+	// APIKey is the Namecheap API key
+	APIKey string `mapstructure:"api_key" yaml:"api_key"`
+
+	// UserName is the Namecheap account username (optional, defaults to APIUser)
+	UserName string `mapstructure:"username" yaml:"username"`
+
+	// UseSandbox enables the Namecheap sandbox API
+	UseSandbox bool `mapstructure:"sandbox" yaml:"sandbox"`
+}
+
+// GetNamecheapCredentials extracts Namecheap credentials from provider config.
+func (pc *ProviderConfig) GetNamecheapCredentials() (*NamecheapCredentials, error) {
+	creds := &NamecheapCredentials{}
+
+	if apiUser, ok := pc.Credentials["api_user"].(string); ok {
+		creds.APIUser = apiUser
+	}
+
+	if apiKey, ok := pc.Credentials["api_key"].(string); ok {
+		creds.APIKey = apiKey
+	}
+
+	if userName, ok := pc.Credentials["username"].(string); ok {
+		creds.UserName = userName
+	}
+
+	if sandbox, ok := pc.Credentials["sandbox"].(bool); ok {
+		creds.UseSandbox = sandbox
+	}
+
+	return creds, nil
+}

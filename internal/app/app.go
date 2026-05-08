@@ -39,6 +39,7 @@ func initDefaultRegistry() {
 		// Register all available providers
 		defaultRegistry.Register(providers.NewCloudflareFactory())
 		defaultRegistry.Register(providers.NewRegRuFactory())
+		defaultRegistry.Register(providers.NewNamecheapFactory())
 		// Add more providers here as they are implemented
 		// defaultRegistry.Register(providers.NewRoute53Factory())
 		// defaultRegistry.Register(providers.NewDigitalOceanFactory())

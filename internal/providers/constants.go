@@ -20,12 +20,14 @@ package providers
 const (
 	TypeCloudflare = "cloudflare"
 	TypeRegRu      = "regru"
+	TypeNamecheap  = "namecheap"
 )
 
 // DefaultDisplayNames contains default display names for provider types.
 var DefaultDisplayNames = map[string]string{
 	TypeCloudflare: "Cloudflare",
 	TypeRegRu:      "RegRu",
+	TypeNamecheap:  "Namecheap",
 }
 
 // GetDisplayName returns the display name for a provider type.

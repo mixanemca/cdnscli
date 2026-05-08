@@ -33,6 +33,18 @@ providers:
       username: your-regru-username
       password: your-regru-password
 
+  namecheap:
+    type: namecheap
+    # display-name: Namecheap  # Optional: custom display name for the provider (defaults to "Namecheap" for namecheap type)
+    credentials:
+      api_user: your-namecheap-username
+      api_key: your-namecheap-api-key
+      # username: your-namecheap-username  # Optional: defaults to api_user
+      # sandbox: false                     # Optional: use sandbox API for testing
+    options:
+      # ip_provider_url: https://api.ipify.org  # Optional: URL to detect public IP (plain-text or JSON {"ip":"..."})
+      #                                           # The detected IP must be whitelisted in your Namecheap account
+
 # Example: Multiple Cloudflare accounts
 # providers:
 #   cf-production:
