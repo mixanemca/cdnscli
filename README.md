@@ -29,22 +29,19 @@ The utility supports two modes of operation:
 
 ## Supported Providers
 
-| Provider | Authentication | Features | Status |
-|----------|---------------|----------|--------|
-| [Cloudflare](https://www.cloudflare.com/) | API Token<br>API Key + Email | ✅ Add/Update/Delete records<br>✅ List zones and records<br>✅ Search records<br>✅ Multiple accounts support<br>✅ Custom display names | ✅ Fully Supported |
+| Provider | Authentication | Status |
+|----------|---------------|--------|
+| [Cloudflare](https://www.cloudflare.com/) | API Token or API Key + Email | ✅ Fully Supported |
+| [Reg.ru](https://www.reg.ru/) | Username + Password | ✅ Fully Supported |
+| [Namecheap](https://www.namecheap.com/) | API User + API Key | ✅ Fully Supported |
 
-> **Note**: More providers are planned for future releases. If you'd like to see support for a specific provider, please [open an issue](https://github.com/mixanemca/cdnscli/issues).
+All providers support: add / update / delete records, list zones and records, search records, multiple accounts, custom display names.
 
 ## Usage
 
 ```bash
 cdnscli help
 ```
-
-#### Receiving a token
-
-Login to Cloudflare [dash](https://dash.cloudflare.com/login).  
-Go to `My Account` -> `API Tokens` and create a new token.
 
 ## Configuration
 
@@ -55,77 +52,116 @@ Create a configuration file `~/.cdnscli.yaml` in your home directory:
 > cp cdnscli.yaml.example ~/.cdnscli.yaml
 > ```
 
-Then edit the file with your credentials:
+### Cloudflare
+
+Login to [Cloudflare dashboard](https://dash.cloudflare.com/login), go to `My Account` → `API Tokens` and create a new token.
 
 ```yaml
 default-provider: cloudflare
 client-timeout: 10s
 output-format: text
-debug: false
 
 providers:
   cloudflare:
     type: cloudflare
-    # display-name: Cloudflare  # Optional: custom display name for the provider (defaults to "Cloudflare" for cloudflare type)
     credentials:
-      api-token: your-cloudflare-api-token-here
-    # Alternative authentication (api-key + email):
+      api_token: your-cloudflare-api-token-here
+    # Alternative authentication (api_key + email):
     # credentials:
-    #   api-key: your-api-key
+    #   api_key: your-api-key
     #   email: your-email@example.com
 ```
 
-#### Multiple Providers
+### Reg.ru
 
-You can configure multiple providers of the same type (e.g., multiple Cloudflare accounts) by giving them different names:
+Login to [Reg.ru](https://www.reg.ru/), go to account settings and enable API access. Use your account username and password.
+
+```yaml
+default-provider: regru
+client-timeout: 10s
+output-format: text
+
+providers:
+  regru:
+    type: regru
+    credentials:
+      username: your-regru-username
+      password: your-regru-password
+```
+
+### Namecheap
+
+Log in to [Namecheap](https://www.namecheap.com/), go to `Profile` → `Tools` → `Business & Dev Tools` and enable API access. Whitelist your public IP address in the API settings.
+
+```yaml
+default-provider: namecheap
+client-timeout: 10s
+output-format: text
+
+providers:
+  namecheap:
+    type: namecheap
+    credentials:
+      api_user: your-namecheap-username
+      api_key: your-namecheap-api-key
+      # username: your-namecheap-username  # optional, defaults to api_user
+      # sandbox: false                     # optional, use sandbox API for testing
+    options:
+      # ip_provider_url: https://api.ipify.org  # optional, URL to detect your public IP
+      #                                           # response can be plain-text or JSON {"ip":"..."}
+```
+
+> **Note**: Namecheap requires your public IP to be whitelisted in the API settings. The tool detects your current IP automatically using `https://api.ipify.org` by default. You can override this with the `ip_provider_url` option.
+
+### Multiple Providers
+
+You can configure multiple providers of the same or different types simultaneously:
 
 ```yaml
 default-provider: cf-production
 client-timeout: 10s
 output-format: text
-debug: false
 
 providers:
   cf-production:
     type: cloudflare
-    display-name: Cloudflare Production  # Optional: custom display name
+    display-name: Cloudflare Production
     credentials:
-      api-token: production-account-token
+      api_token: production-account-token
   cf-staging:
     type: cloudflare
-    display-name: Cloudflare Staging  # Optional: custom display name
+    display-name: Cloudflare Staging
     credentials:
-      api-token: staging-account-token
-  cf-personal:
-    type: cloudflare
-    # display-name is optional - if not specified, defaults to "Cloudflare"
+      api_token: staging-account-token
+  regru:
+    type: regru
     credentials:
-      api-token: personal-account-token
+      username: your-regru-username
+      password: your-regru-password
+  namecheap:
+    type: namecheap
+    credentials:
+      api_user: your-namecheap-username
+      api_key: your-namecheap-api-key
 ```
 
-To switch between providers, change the `default-provider` value in the config file, or use the default provider specified in the config.
+To switch between providers, change the `default-provider` value in the config file.
+
+### Environment Variables
 
 You can also use environment variables instead of a config file:
 
 ```bash
-export CLOUDFLARE_API_TOKEN=your-cloudflare-api-token-here
-# or
-export CDNSCLI_PROVIDERS_CLOUDFLARE_CREDENTIALS_API_TOKEN=your-cloudflare-api-token-here
-# Note: environment variables use underscores, not dashes
-```
+# Cloudflare
+export CDNSCLI_PROVIDERS_CLOUDFLARE_CREDENTIALS_API_TOKEN=your-token
 
-#### Multiple Providers with Environment Variables
+# Reg.ru
+export CDNSCLI_PROVIDERS_REGRU_CREDENTIALS_USERNAME=your-username
+export CDNSCLI_PROVIDERS_REGRU_CREDENTIALS_PASSWORD=your-password
 
-For multiple providers, you can use environment variables with the provider name:
-
-```bash
-# Set default provider
-export CDNSCLI_DEFAULT_PROVIDER=cf-production
-
-# Configure each provider
-export CDNSCLI_PROVIDERS_CF_PRODUCTION_CREDENTIALS_API_TOKEN=production-account-token
-export CDNSCLI_PROVIDERS_CF_STAGING_CREDENTIALS_API_TOKEN=staging-account-token
-export CDNSCLI_PROVIDERS_CF_PERSONAL_CREDENTIALS_API_TOKEN=personal-account-token
+# Namecheap
+export CDNSCLI_PROVIDERS_NAMECHEAP_CREDENTIALS_API_USER=your-username
+export CDNSCLI_PROVIDERS_NAMECHEAP_CREDENTIALS_API_KEY=your-api-key
 ```
 
 Environment variables follow the pattern: `CDNSCLI_PROVIDERS_<PROVIDER_NAME>_CREDENTIALS_<CREDENTIAL_KEY>`
@@ -171,11 +207,6 @@ Update an existing record:
 cdnscli rr update -t A -n www -z example.com -c 192.0.2.3
 ```
 
-Change a record (with full SOA example):
-```bash
-cdnscli rr change --name example.com --zone example.com --type SOA --content "ns1.example.com. admins.example.com. 1970010100 1800 900 604800 86400"
-```
-
 Delete a record:
 ```bash
 cdnscli rr del -t A -n www -z example.com
@@ -212,10 +243,6 @@ Search for records in a specific zone:
 ```bash
 cdnscli search -z example.com
 ```
-
-### Using Different Providers
-
-If you have multiple providers configured, switch between them by changing `default-provider` in your config file, or specify the provider in commands (if supported).
 
 ### Output Formats
 
@@ -261,15 +288,11 @@ Download the appropriate `cdnscli_Windows_x86_64.zip` or `cdnscli_Windows_arm64.
 
 ### Homebrew (macOS/Linux)
 
-Install using Homebrew:
-
 ```bash
 brew install mixanemca/tap/cdnscli
 ```
 
 ### Go Install
-
-Install directly from source:
 
 ```bash
 go install github.com/mixanemca/cdnscli@latest
@@ -286,7 +309,7 @@ make
 make install
 ```
 
-## Testing (WIP)
+## Testing
 
 ```bash
 make test
