@@ -20,6 +20,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -196,6 +197,7 @@ func (m *Model) Init() tea.Cmd {
 					cmds = append(cmds, m.updateRRSet(zone.Name))
 				}
 			}
+			sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
 			m.ZonesTable.SetRows(rows)
 			m.current = &m.ZonesTable
 
