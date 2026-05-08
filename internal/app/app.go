@@ -18,6 +18,7 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -147,6 +148,17 @@ func (a *app) ProviderNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func (a *app) ProviderForZone(zoneName string) (providers.Provider, error) {
+	for _, name := range a.ProviderNames() {
+		p := a.providers[name]
+		zones, err := p.ListZonesByName(context.Background(), zoneName)
+		if err == nil && len(zones) > 0 {
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("zone %s could not be found in any configured provider", zoneName)
 }
 
 func (a *app) ProviderDisplayName(name string) string {

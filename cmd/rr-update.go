@@ -69,10 +69,16 @@ func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	p, err := a.ProviderForZone(zone)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	rr, err := a.Provider().GetRRByName(ctx, zone, name)
+	rr, err := p.GetRRByName(ctx, zone, name)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -82,7 +88,7 @@ func rrUpdateCmdRun(cmd *cobra.Command, args []string) {
 	// rr.TTL = ttl
 	// rr.Proxied = cloudflare.BoolPtr(proxied)
 
-	updated, err := a.Provider().UpdateRR(ctx, zone, rr)
+	updated, err := p.UpdateRR(ctx, zone, rr)
 	if err != nil {
 		return
 	}

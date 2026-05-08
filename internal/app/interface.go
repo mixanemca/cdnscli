@@ -34,6 +34,10 @@ type App interface {
 	DefaultProviderName() string
 	// ProviderDisplayName returns the display name for the given provider config key.
 	ProviderDisplayName(name string) string
+	// ProviderForZone finds the provider that owns the given zone name.
+	// It queries all configured providers and returns the first one that finds the zone.
+	// Returns an error if no provider has the zone.
+	ProviderForZone(zoneName string) (providers.Provider, error)
 	// Printer returns a specialized API for pretty printing.
 	Printer() prettyprint.PrettyPrinter
 }

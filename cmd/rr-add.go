@@ -90,10 +90,16 @@ func rrAddCmdRun(cmd *cobra.Command, args []string) {
 		ZoneName: zone,
 	}
 
+	p, err := a.ProviderForZone(zone)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	rr, err := a.Provider().AddRR(ctx, zone, params)
+	rr, err := p.AddRR(ctx, zone, params)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

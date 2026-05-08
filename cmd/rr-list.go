@@ -56,10 +56,16 @@ func rrListCmdRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	p, err := a.ProviderForZone(zone)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), getTimeout())
 	defer cancel()
 
-	recs, err := a.Provider().ListRecords(ctx, models.ListDNSRecordsParams{
+	recs, err := p.ListRecords(ctx, models.ListDNSRecordsParams{
 		ZoneName: zone,
 	})
 	if err != nil {
