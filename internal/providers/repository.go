@@ -18,9 +18,14 @@ package providers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v7"
+	"github.com/cloudflare/cloudflare-go/v7/dns"
+	"github.com/cloudflare/cloudflare-go/v7/zones"
 	"github.com/mixanemca/cdnscli/internal/models"
+	"golang.org/x/net/idna"
 )
 
 // Repo repository of DNS zones and resource records.
@@ -35,62 +40,54 @@ type Repo interface {
 }
 
 type repoCloudFlare struct {
-	api *cloudflare.API
+	client *cloudflare.Client
 }
 
 // NewRepoCloudFlare creates a repository for CloudFlare provider.
-func NewRepoCloudFlare(api *cloudflare.API) Repo {
+func NewRepoCloudFlare(client *cloudflare.Client) Repo {
 	return &repoCloudFlare{
-		api: api,
+		client: client,
 	}
 }
 
 func (r *repoCloudFlare) GetDNSRecord(ctx context.Context, zoneID, recordID string) (models.DNSRecord, error) {
-	// Create a ResourceContainer for the zone
-	rc := cloudflare.ResourceContainer{
-		Level:      cloudflare.ZoneRouteLevel,
-		Identifier: zoneID,
-		Type:       cloudflare.ZoneType,
-	}
-
-	record, err := r.api.GetDNSRecord(ctx, &rc, recordID)
+	record, err := r.client.DNS.Records.Get(ctx, recordID, dns.RecordGetParams{
+		ZoneID: cloudflare.F(zoneID),
+	})
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	return convFromDNSRecord(record), nil
+	return convFromDNSRecord(*record), nil
 }
 
 func (r *repoCloudFlare) CreateDNSRecord(ctx context.Context, params models.CreateDNSRecordParams) (models.DNSRecord, error) {
-	// Create a ResourceContainer for the zone
-	rc := cloudflare.ResourceContainer{
-		Level:      cloudflare.ZoneRouteLevel,
-		Identifier: params.ZoneID,
-		Type:       cloudflare.ZoneType,
-	}
-
-	rr, err := r.api.CreateDNSRecord(ctx, &rc, convToCreateDNSRecordParams(params))
+	rr, err := r.client.DNS.Records.New(ctx, convToCreateDNSRecordParams(params))
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	return convFromDNSRecord(rr), nil
+	return convFromDNSRecord(*rr), nil
 }
 
 func (r *repoCloudFlare) DeleteDNSRecord(ctx context.Context, zoneID, recordID string) error {
-	// Create a ResourceContainer for the zone
-	rc := cloudflare.ResourceContainer{
-		Level:      cloudflare.ZoneRouteLevel,
-		Identifier: zoneID,
-		Type:       cloudflare.ZoneType,
-	}
+	_, err := r.client.DNS.Records.Delete(ctx, recordID, dns.RecordDeleteParams{
+		ZoneID: cloudflare.F(zoneID),
+	})
 
-	return r.api.DeleteDNSRecord(ctx, &rc, recordID)
+	return err
 }
 
 func (r *repoCloudFlare) ListDNSRecords(ctx context.Context, id string) ([]models.DNSRecord, error) {
-	rrset, _, err := r.api.ListDNSRecords(ctx, cloudflare.ZoneIdentifier(id), cloudflare.ListDNSRecordsParams{})
-	if err != nil {
+	iter := r.client.DNS.Records.ListAutoPaging(ctx, dns.RecordListParams{
+		ZoneID: cloudflare.F(id),
+	})
+
+	var rrset []dns.RecordResponse
+	for iter.Next() {
+		rrset = append(rrset, iter.Current())
+	}
+	if err := iter.Err(); err != nil {
 		return []models.DNSRecord{}, err
 	}
 
@@ -98,30 +95,85 @@ func (r *repoCloudFlare) ListDNSRecords(ctx context.Context, id string) ([]model
 }
 
 func (r *repoCloudFlare) ListZones(ctx context.Context, z ...string) ([]models.Zone, error) {
-	zones, err := r.api.ListZones(ctx, z...)
-	if err != nil {
-		return []models.Zone{}, err
+	if len(z) == 0 {
+		cfzones, err := r.listZones(ctx, zones.ZoneListParams{})
+		if err != nil {
+			return []models.Zone{}, err
+		}
+
+		return convFromDNSZones(cfzones), nil
 	}
 
-	return convFromDNSZones(zones), nil
+	// A name filter matches at most a handful of zones, so a single page per
+	// name is enough (as in the v0 SDK) and avoids fetching an empty next page.
+	var cfzones []zones.Zone
+	for _, name := range z {
+		page, err := r.client.Zones.List(ctx, zones.ZoneListParams{
+			Name: cloudflare.F(normalizeZoneName(name)),
+		})
+		if err != nil {
+			return []models.Zone{}, err
+		}
+		cfzones = append(cfzones, page.Result...)
+	}
+
+	return convFromDNSZones(cfzones), nil
 }
 
 func (r *repoCloudFlare) UpdateDNSRecord(ctx context.Context, params models.UpdateDNSRecordParams) (models.DNSRecord, error) {
-	// Create a ResourceContainer
-	rc := cloudflare.ResourceContainer{
-		Level:      cloudflare.ZoneRouteLevel,
-		Identifier: params.ZoneID,
-		Type:       cloudflare.ZoneType,
-	}
-
-	rr, err := r.api.UpdateDNSRecord(ctx, &rc, convToUpdateDNSRecordParams(params))
+	rr, err := r.client.DNS.Records.Update(
+		ctx, params.ID, convToUpdateDNSRecordParams(params),
+	)
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	return convFromDNSRecord(rr), nil
+	return convFromDNSRecord(*rr), nil
 }
 
 func (r *repoCloudFlare) ZoneIDByName(zoneName string) (string, error) {
-	return r.api.ZoneIDByName(zoneName)
+	// Single page for the same reason as in ListZones with a name filter.
+	page, err := r.client.Zones.List(context.Background(), zones.ZoneListParams{
+		Name: cloudflare.F(normalizeZoneName(zoneName)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("zones list command failed: %w", err)
+	}
+
+	switch len(page.Result) {
+	case 0:
+		return "", errors.New("zone could not be found")
+	case 1:
+		return page.Result[0].ID, nil
+	default:
+		return "", errors.New("ambiguous zone name; an account ID might help")
+	}
+}
+
+// listZones collects zones from all result pages for the given list parameters.
+func (r *repoCloudFlare) listZones(
+	ctx context.Context, params zones.ZoneListParams,
+) ([]zones.Zone, error) {
+	iter := r.client.Zones.ListAutoPaging(ctx, params)
+
+	var result []zones.Zone
+	for iter.Next() {
+		result = append(result, iter.Current())
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// normalizeZoneName converts an IDN zone name from Punycode to its Unicode
+// form, which is how Cloudflare stores zone names. Names that are not valid
+// Punycode are returned unchanged.
+func normalizeZoneName(name string) string {
+	if n, err := idna.ToUnicode(name); err == nil {
+		return n
+	}
+
+	return name
 }

@@ -19,17 +19,18 @@ package providers
 import (
 	"context"
 	"fmt"
-	"net/http"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v7"
+	"github.com/cloudflare/cloudflare-go/v7/option"
+	"github.com/cloudflare/cloudflare-go/v7/zones"
 	"github.com/mixanemca/cdnscli/internal/config"
 )
 
 // cloudflareFactory creates Cloudflare providers.
 type cloudflareFactory struct {
-	// opts are extra options passed to the Cloudflare API client
-	// (used by tests to point the client at a fake API server).
-	opts []cloudflare.Option
+	// opts are extra options passed to the Cloudflare API client after the
+	// credentials (used by tests to point the client at a fake API server).
+	opts []option.RequestOption
 }
 
 // NewCloudflareFactory creates a new Cloudflare provider factory.
@@ -63,28 +64,38 @@ func (f *cloudflareFactory) CreateProvider(cfg *config.ProviderConfig) (Provider
 		return nil, NewProviderCredentialsError(TypeCloudflare, err.Error(), nil)
 	}
 
-	var api *cloudflare.API
+	client := cloudflare.NewClient(append(cloudflareAuthOptions(creds), f.opts...)...)
 
-	if creds.APIToken != "" {
-		api, err = cloudflare.NewWithAPIToken(creds.APIToken, f.opts...)
-		if err != nil {
-			return nil, NewProviderCredentialsError(TypeCloudflare,
-				"failed to create API client with token", err)
-		}
-	} else {
-		api, err = cloudflare.New(creds.APIKey, creds.Email, f.opts...)
-		if err != nil {
-			return nil, NewProviderCredentialsError(TypeCloudflare,
-				"failed to create API client with API key and email", err)
-		}
-	}
-
-	if err := verifyCloudflareCredentials(context.Background(), api); err != nil {
+	if err := verifyCloudflareCredentials(context.Background(), client); err != nil {
 		return nil, NewProviderCredentialsError(TypeCloudflare, cloudflareVerifyHint(creds), err)
 	}
 
-	repo := NewRepoCloudFlare(api)
+	repo := NewRepoCloudFlare(client)
 	return NewProvider(repo), nil
+}
+
+// cloudflareAuthOptions returns the client options for the configured
+// credentials.
+//
+// The SDK also picks up CLOUDFLARE_* environment variables by default.
+// Configured credentials must win, so the auth headers of the other
+// credential kinds are dropped to avoid sending mixed credentials.
+func cloudflareAuthOptions(creds *config.CloudflareCredentials) []option.RequestOption {
+	if creds.APIToken != "" {
+		return []option.RequestOption{
+			option.WithAPIToken(creds.APIToken),
+			option.WithHeaderDel("X-Auth-Key"),
+			option.WithHeaderDel("X-Auth-Email"),
+			option.WithHeaderDel("X-Auth-User-Service-Key"),
+		}
+	}
+
+	return []option.RequestOption{
+		option.WithAPIKey(creds.APIKey),
+		option.WithAPIEmail(creds.Email),
+		option.WithHeaderDel("Authorization"),
+		option.WithHeaderDel("X-Auth-User-Service-Key"),
+	}
 }
 
 // verifyCloudflareCredentials checks that Cloudflare accepts the configured
@@ -95,8 +106,10 @@ func (f *cloudflareFactory) CreateProvider(cfg *config.ProviderConfig) (Provider
 // Global API Keys with "Invalid API Token (1000)". Listing zones works with all
 // credential types and additionally checks the Zone:Read permission that every
 // cdnscli command needs anyway.
-func verifyCloudflareCredentials(ctx context.Context, api *cloudflare.API) error {
-	_, err := api.Raw(ctx, http.MethodGet, "/zones?per_page=1", nil, nil)
+func verifyCloudflareCredentials(ctx context.Context, client *cloudflare.Client) error {
+	_, err := client.Zones.List(ctx, zones.ZoneListParams{
+		PerPage: cloudflare.F(1.0),
+	})
 	return err
 }
 

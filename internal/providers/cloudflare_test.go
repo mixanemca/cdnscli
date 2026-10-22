@@ -21,7 +21,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v7"
+	"github.com/cloudflare/cloudflare-go/v7/dns"
+	"github.com/cloudflare/cloudflare-go/v7/zones"
 	"github.com/mixanemca/cdnscli/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -993,17 +995,17 @@ func TestUpdateteDNSRecord(t *testing.T) {
 func TestConvFromDNSRecord(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    cloudflare.DNSRecord
+		input    dns.RecordResponse
 		expected models.DNSRecord
 	}{
 		{
 			name: "Valid input",
-			input: cloudflare.DNSRecord{
+			input: dns.RecordResponse{
 				ID:      "record-id",
 				Name:    "example.com",
 				TTL:     3600,
-				Type:    "A",
-				Proxied: cloudflare.BoolPtr(true),
+				Type:    dns.RecordResponseTypeA,
+				Proxied: true,
 				Content: "192.168.0.1",
 			},
 			expected: models.DNSRecord{
@@ -1017,7 +1019,7 @@ func TestConvFromDNSRecord(t *testing.T) {
 		},
 		{
 			name:  "Empty input",
-			input: cloudflare.DNSRecord{},
+			input: dns.RecordResponse{},
 			expected: models.DNSRecord{
 				ID:      "",
 				Name:    "",
@@ -1040,18 +1042,18 @@ func TestConvFromDNSRecord(t *testing.T) {
 func TestConvFromDNSRecords(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []cloudflare.DNSRecord
+		input    []dns.RecordResponse
 		expected []models.DNSRecord
 	}{
 		{
 			name: "Valid input",
-			input: []cloudflare.DNSRecord{
+			input: []dns.RecordResponse{
 				{
 					ID:      "record-id",
 					Name:    "example.com",
 					TTL:     3600,
-					Type:    "A",
-					Proxied: cloudflare.BoolPtr(true),
+					Type:    dns.RecordResponseTypeA,
+					Proxied: true,
 					Content: "192.168.0.1",
 				},
 			},
@@ -1068,7 +1070,7 @@ func TestConvFromDNSRecords(t *testing.T) {
 		},
 		{
 			name:     "Empty input",
-			input:    []cloudflare.DNSRecord{},
+			input:    []dns.RecordResponse{},
 			expected: []models.DNSRecord{},
 		},
 	}
@@ -1084,17 +1086,17 @@ func TestConvFromDNSRecords(t *testing.T) {
 func TestConvFromDNSZones(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []cloudflare.Zone
+		input    []zones.Zone
 		expected []models.Zone
 	}{
 		{
 			name: "Valid input",
-			input: []cloudflare.Zone{
+			input: []zones.Zone{
 				{
 					ID:          "zone-id",
 					Name:        "example-zone",
 					NameServers: []string{"ns1.example.com", "ns2.example.com"},
-					Status:      "active",
+					Status:      zones.ZoneStatusActive,
 				},
 			},
 			expected: []models.Zone{
@@ -1108,7 +1110,7 @@ func TestConvFromDNSZones(t *testing.T) {
 		},
 		{
 			name:     "Empty input",
-			input:    []cloudflare.Zone{},
+			input:    []zones.Zone{},
 			expected: []models.Zone{},
 		},
 	}
@@ -1125,7 +1127,7 @@ func TestConvToCreateDNSRecordParams(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    models.CreateDNSRecordParams
-		expected cloudflare.CreateDNSRecordParams
+		expected dns.RecordNewParams
 	}{
 		{
 			name: "Valid input",
@@ -1138,27 +1140,28 @@ func TestConvToCreateDNSRecordParams(t *testing.T) {
 				ZoneName: "example-zone",
 				ZoneID:   "zone-id",
 			},
-			expected: cloudflare.CreateDNSRecordParams{
-				Content:  "192.168.0.1",
-				Name:     "example.com",
-				Proxied:  cloudflare.BoolPtr(true),
-				TTL:      3600,
-				Type:     "A",
-				ZoneName: "example-zone",
-				ZoneID:   "zone-id",
+			expected: dns.RecordNewParams{
+				ZoneID: cloudflare.F("zone-id"),
+				Body: dns.RecordNewParamsBody{
+					Content: cloudflare.F("192.168.0.1"),
+					Name:    cloudflare.F("example.com"),
+					Proxied: cloudflare.F(true),
+					TTL:     cloudflare.F(dns.TTL(3600)),
+					Type:    cloudflare.F(dns.RecordNewParamsBodyTypeA),
+				},
 			},
 		},
 		{
 			name:  "Empty input",
 			input: models.CreateDNSRecordParams{},
-			expected: cloudflare.CreateDNSRecordParams{
-				Content:  "",
-				Name:     "",
-				Proxied:  cloudflare.BoolPtr(false),
-				TTL:      0,
-				Type:     "",
-				ZoneName: "",
-				ZoneID:   "",
+			expected: dns.RecordNewParams{
+				ZoneID: cloudflare.F(""),
+				Body: dns.RecordNewParamsBody{
+					Content: cloudflare.F(""),
+					Name:    cloudflare.F(""),
+					Proxied: cloudflare.F(false),
+					Type:    cloudflare.F(dns.RecordNewParamsBodyType("")),
+				},
 			},
 		},
 	}
@@ -1174,41 +1177,52 @@ func TestConvToCreateDNSRecordParams(t *testing.T) {
 func TestConvFromCreateDNSRecordParams(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    cloudflare.CreateDNSRecordParams
+		input    dns.RecordNewParams
 		expected models.CreateDNSRecordParams
 	}{
 		{
 			name: "Valid input",
-			input: cloudflare.CreateDNSRecordParams{
-				Content:  "192.168.0.1",
-				Name:     "example.com",
-				Proxied:  cloudflare.BoolPtr(true),
-				TTL:      3600,
-				Type:     "A",
-				ZoneName: "example-zone",
-				ZoneID:   "zone-id",
+			input: dns.RecordNewParams{
+				ZoneID: cloudflare.F("zone-id"),
+				Body: dns.RecordNewParamsBody{
+					Content: cloudflare.F("192.168.0.1"),
+					Name:    cloudflare.F("example.com"),
+					Proxied: cloudflare.F(true),
+					TTL:     cloudflare.F(dns.TTL(3600)),
+					Type:    cloudflare.F(dns.RecordNewParamsBodyTypeA),
+				},
 			},
 			expected: models.CreateDNSRecordParams{
-				Content:  "192.168.0.1",
-				Name:     "example.com",
-				Proxied:  true,
-				TTL:      3600,
-				Type:     "A",
-				ZoneName: "example-zone",
-				ZoneID:   "zone-id",
+				Content: "192.168.0.1",
+				Name:    "example.com",
+				Proxied: true,
+				TTL:     3600,
+				Type:    "A",
+				ZoneID:  "zone-id",
 			},
 		},
 		{
 			name:  "Empty input",
-			input: cloudflare.CreateDNSRecordParams{},
+			input: dns.RecordNewParams{},
 			expected: models.CreateDNSRecordParams{
-				Content:  "",
-				Name:     "",
-				Proxied:  false,
-				TTL:      0,
-				Type:     "",
-				ZoneName: "",
-				ZoneID:   "",
+				Content: "",
+				Name:    "",
+				Proxied: false,
+				TTL:     0,
+				Type:    "",
+				ZoneID:  "",
+			},
+		},
+		{
+			name: "Typed record body",
+			input: dns.RecordNewParams{
+				ZoneID: cloudflare.F("zone-id"),
+				Body: dns.ARecordParam{
+					Name: cloudflare.F("example.com"),
+				},
+			},
+			expected: models.CreateDNSRecordParams{
+				ZoneID: "zone-id",
 			},
 		},
 	}
@@ -1225,7 +1239,7 @@ func TestConvToUpdateDNSRecordParams(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    models.UpdateDNSRecordParams
-		expected cloudflare.UpdateDNSRecordParams
+		expected dns.RecordUpdateParams
 	}{
 		{
 			name: "Valid input",
@@ -1236,26 +1250,30 @@ func TestConvToUpdateDNSRecordParams(t *testing.T) {
 				Proxied: true,
 				TTL:     3600,
 				Type:    "A",
+				ZoneID:  "zone-id",
 			},
-			expected: cloudflare.UpdateDNSRecordParams{
-				Content: "192.168.0.1",
-				ID:      "record-id",
-				Name:    "example.com",
-				Proxied: cloudflare.BoolPtr(true),
-				TTL:     3600,
-				Type:    "A",
+			expected: dns.RecordUpdateParams{
+				ZoneID: cloudflare.F("zone-id"),
+				Body: dns.RecordUpdateParamsBody{
+					Content: cloudflare.F("192.168.0.1"),
+					Name:    cloudflare.F("example.com"),
+					Proxied: cloudflare.F(true),
+					TTL:     cloudflare.F(dns.TTL(3600)),
+					Type:    cloudflare.F(dns.RecordUpdateParamsBodyTypeA),
+				},
 			},
 		},
 		{
 			name:  "Empty input",
 			input: models.UpdateDNSRecordParams{},
-			expected: cloudflare.UpdateDNSRecordParams{
-				Content: "",
-				ID:      "",
-				Name:    "",
-				Proxied: cloudflare.BoolPtr(false),
-				TTL:     0,
-				Type:    "",
+			expected: dns.RecordUpdateParams{
+				ZoneID: cloudflare.F(""),
+				Body: dns.RecordUpdateParamsBody{
+					Content: cloudflare.F(""),
+					Name:    cloudflare.F(""),
+					Proxied: cloudflare.F(false),
+					Type:    cloudflare.F(dns.RecordUpdateParamsBodyType("")),
+				},
 			},
 		},
 	}

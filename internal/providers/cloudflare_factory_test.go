@@ -21,7 +21,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v7/option"
 	"github.com/mixanemca/cdnscli/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,7 +189,10 @@ func zonesInvalidToken(w http.ResponseWriter, _ *http.Request) {
 }
 
 func newTestCloudflareFactory(srv *httptest.Server) *cloudflareFactory {
-	return &cloudflareFactory{opts: []cloudflare.Option{cloudflare.BaseURL(srv.URL)}}
+	return &cloudflareFactory{opts: []option.RequestOption{
+		option.WithBaseURL(srv.URL),
+		option.WithMaxRetries(0),
+	}}
 }
 
 func TestCloudflareFactory_CreateProvider_AccountToken(t *testing.T) {

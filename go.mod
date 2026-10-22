@@ -1,10 +1,12 @@
 module github.com/mixanemca/cdnscli
 
-go 1.24.2
+go 1.26
 
 require (
+	github.com/cloudflare/cloudflare-go/v7 v7.13.1
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mixanemca/regru-go v0.2.0
+	github.com/namecheap/go-namecheap-sdk/v2 v2.4.1
 	github.com/rmhubbert/bubbletea-overlay v0.4.4
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -15,11 +17,15 @@ require (
 	github.com/charmbracelet/colorprofile v0.3.1 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/namecheap/go-namecheap-sdk/v2 v2.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/weppos/publicsuffix-go v0.40.2 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
 require (
@@ -29,13 +35,9 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/ansi v0.10.2 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/cloudflare/cloudflare-go v0.100.0
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/goccy/go-json v0.10.3 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
@@ -61,10 +63,9 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
-	golang.org/x/net v0.34.0 // indirect
+	golang.org/x/net v0.34.0
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v7"
+	"github.com/cloudflare/cloudflare-go/v7/dns"
+	"github.com/cloudflare/cloudflare-go/v7/zones"
 	"github.com/mixanemca/cdnscli/internal/models"
 )
 
@@ -226,80 +228,89 @@ func (p *provider) ListRecords(ctx context.Context, params models.ListDNSRecords
 	return filterDNSRecords(rrset, params), nil
 }
 
-func convFromDNSRecord(cfrr cloudflare.DNSRecord) models.DNSRecord {
+// convFromDNSRecord maps a Cloudflare DNS record response onto the generic
+// record model. The v7 response is a flattened union over all record types;
+// only the fields shared by every type are used here.
+func convFromDNSRecord(cfrr dns.RecordResponse) models.DNSRecord {
 	return models.DNSRecord{
 		ID:      cfrr.ID,
 		Name:    cfrr.Name,
-		TTL:     cfrr.TTL,
-		Type:    cfrr.Type,
-		Proxied: cloudflare.Bool(cfrr.Proxied),
+		TTL:     int(cfrr.TTL),
+		Type:    string(cfrr.Type),
+		Proxied: cfrr.Proxied,
 		Content: cfrr.Content,
 	}
 }
 
-func convFromDNSRecords(cfrrset []cloudflare.DNSRecord) []models.DNSRecord {
+func convFromDNSRecords(cfrrset []dns.RecordResponse) []models.DNSRecord {
 	rrset := make([]models.DNSRecord, 0, len(cfrrset))
 	for _, cfrr := range cfrrset {
-		rr := models.DNSRecord{
-			ID:      cfrr.ID,
-			Name:    cfrr.Name,
-			TTL:     cfrr.TTL,
-			Type:    cfrr.Type,
-			Proxied: cloudflare.Bool(cfrr.Proxied),
-			Content: cfrr.Content,
-		}
-		rrset = append(rrset, rr)
+		rrset = append(rrset, convFromDNSRecord(cfrr))
 	}
 
 	return rrset
 }
 
-func convFromDNSZones(cfzones []cloudflare.Zone) []models.Zone {
-	zones := make([]models.Zone, 0, len(cfzones))
+func convFromDNSZones(cfzones []zones.Zone) []models.Zone {
+	result := make([]models.Zone, 0, len(cfzones))
 	for _, z := range cfzones {
 		zone := models.Zone{
 			ID:          z.ID,
 			Name:        z.Name,
 			NameServers: z.NameServers,
-			Status:      z.Status,
+			Status:      string(z.Status),
 		}
-		zones = append(zones, zone)
+		result = append(result, zone)
 	}
 
-	return zones
+	return result
 }
 
-func convToCreateDNSRecordParams(p models.CreateDNSRecordParams) cloudflare.CreateDNSRecordParams {
-	return cloudflare.CreateDNSRecordParams{
-		Content:  p.Content,
-		Name:     p.Name,
-		Proxied:  cloudflare.BoolPtr(p.Proxied),
-		TTL:      p.TTL,
-		Type:     p.Type,
-		ZoneName: p.ZoneName,
-		ZoneID:   p.ZoneID,
+// A zero TTL is left unset in create/update requests so the API applies its
+// default ("automatic"), matching the omitempty behaviour of the v0 SDK.
+func convToCreateDNSRecordParams(p models.CreateDNSRecordParams) dns.RecordNewParams {
+	body := dns.RecordNewParamsBody{
+		Content: cloudflare.F(p.Content),
+		Name:    cloudflare.F(p.Name),
+		Proxied: cloudflare.F(p.Proxied),
+		Type:    cloudflare.F(dns.RecordNewParamsBodyType(p.Type)),
+	}
+	if p.TTL != 0 {
+		body.TTL = cloudflare.F(dns.TTL(p.TTL))
+	}
+
+	return dns.RecordNewParams{
+		ZoneID: cloudflare.F(p.ZoneID),
+		Body:   body,
 	}
 }
 
-func convFromCreateDNSRecordParams(p cloudflare.CreateDNSRecordParams) models.CreateDNSRecordParams {
+func convFromCreateDNSRecordParams(p dns.RecordNewParams) models.CreateDNSRecordParams {
+	body, _ := p.Body.(dns.RecordNewParamsBody)
+
 	return models.CreateDNSRecordParams{
-		Content:  p.Content,
-		Name:     p.Name,
-		Proxied:  cloudflare.Bool(p.Proxied),
-		TTL:      p.TTL,
-		Type:     p.Type,
-		ZoneName: p.ZoneName,
-		ZoneID:   p.ZoneID,
+		Content: body.Content.Value,
+		Name:    body.Name.Value,
+		Proxied: body.Proxied.Value,
+		TTL:     int(body.TTL.Value),
+		Type:    string(body.Type.Value),
+		ZoneID:  p.ZoneID.Value,
 	}
 }
 
-func convToUpdateDNSRecordParams(p models.UpdateDNSRecordParams) cloudflare.UpdateDNSRecordParams {
-	return cloudflare.UpdateDNSRecordParams{
-		Content: p.Content,
-		ID:      p.ID,
-		Name:    p.Name,
-		Proxied: cloudflare.BoolPtr(p.Proxied),
-		TTL:     p.TTL,
-		Type:    p.Type,
+func convToUpdateDNSRecordParams(p models.UpdateDNSRecordParams) dns.RecordUpdateParams {
+	body := dns.RecordUpdateParamsBody{
+		Content: cloudflare.F(p.Content),
+		Name:    cloudflare.F(p.Name),
+		Proxied: cloudflare.F(p.Proxied),
+		Type:    cloudflare.F(dns.RecordUpdateParamsBodyType(p.Type)),
+	}
+	if p.TTL != 0 {
+		body.TTL = cloudflare.F(dns.TTL(p.TTL))
+	}
+
+	return dns.RecordUpdateParams{
+		ZoneID: cloudflare.F(p.ZoneID),
+		Body:   body,
 	}
 }
