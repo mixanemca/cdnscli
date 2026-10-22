@@ -298,6 +298,14 @@ Download the appropriate `cdnscli_Windows_x86_64.zip` or `cdnscli_Windows_arm64.
 
 ### Homebrew (macOS/Linux)
 
+Homebrew 7 and newer loads formulae from third-party taps only after you trust the tap once:
+
+```bash
+brew trust mixanemca/tap
+```
+
+Then install:
+
 ```bash
 brew install mixanemca/tap/cdnscli
 ```
