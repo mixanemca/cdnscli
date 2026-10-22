@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -76,7 +75,7 @@ type (
 		zoneProvider map[string]string
 		rrCmds       []tea.Cmd
 	}
-	recordCreatedMsg      struct {
+	recordCreatedMsg struct {
 		record models.DNSRecord
 	}
 	recordDeletedMsg struct {
@@ -475,7 +474,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rows := m.RRSetTable.Rows()
 			newRow := table.Row{
 				msg.record.Name,
-				strconv.Itoa(msg.record.TTL),
+				formatTTL(msg.record.TTL),
 				msg.record.Type,
 				boolToCheckMark(msg.record.Proxied),
 				msg.record.Content,
@@ -677,7 +676,7 @@ func (m *Model) viewRRSet() string {
 	for _, rr := range rrset {
 		rows = append(rows, table.Row{
 			rr.Name,
-			strconv.Itoa(rr.TTL),
+			formatTTL(rr.TTL),
 			rr.Type,
 			boolToCheckMark(rr.Proxied),
 			rr.Content,
@@ -773,7 +772,7 @@ func rowMatchesRecord(row table.Row, record models.DNSRecord) bool {
 	if row[0] != record.Name || row[2] != record.Type || row[4] != record.Content {
 		return false
 	}
-	if record.TTL != 0 && row[1] != strconv.Itoa(record.TTL) {
+	if record.TTL != 0 && row[1] != formatTTL(record.TTL) {
 		return false
 	}
 	if row[3] != boolToCheckMark(record.Proxied) {
@@ -800,7 +799,7 @@ func (m *Model) updateTableRow(index int, newRow table.Row) {
 			}
 			for i := range rrset {
 				if rrset[i].Name == newRow[0] {
-					rrset[i].TTL, _ = strconv.Atoi(newRow[1])
+					rrset[i].TTL = parseTTL(newRow[1])
 					rrset[i].Type = newRow[2]
 					// newRow[3] is "true"/"false"; convert to bool
 					rrset[i].Proxied = strings.ToLower(newRow[3]) == "true"
@@ -1006,7 +1005,7 @@ func (m *Model) updateRRFromFields(fields []string) tea.Cmd {
 			}
 		}
 
-		ttl, _ := strconv.Atoi(fields[1])
+		ttl := parseTTL(fields[1])
 		proxied := strings.ToLower(fields[3]) == "true"
 
 		// Build updated record
@@ -1069,7 +1068,7 @@ func (m *Model) createRRFromFields(fields []string) tea.Cmd {
 		}
 		zoneName := zoneRow[0]
 
-		ttl, _ := strconv.Atoi(fields[1])
+		ttl := parseTTL(fields[1])
 		proxied := strings.ToLower(fields[3]) == "true"
 
 		// Build create params
@@ -1124,7 +1123,7 @@ func (m *Model) deleteRR(cursor int) tea.Cmd {
 			return nil
 		}
 		recordName := row[0]
-		ttl, _ := strconv.Atoi(row[1])
+		ttl := parseTTL(row[1])
 		proxied := row[3] == checkMark
 		target := models.DNSRecord{
 			Name:    recordName,

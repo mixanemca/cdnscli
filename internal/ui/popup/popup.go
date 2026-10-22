@@ -311,18 +311,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch km.Type {
 			case tea.KeyEnter:
-				fieldName := strings.ToLower(m.ColumnNames[m.Cursor])
-				rrType := strings.ToUpper(m.currentType())
-				if errText := validateInput(fieldName, m.textBuf, rrType); errText != "" {
-					m.textErr = errText
+				if !m.applyTextEdit() {
 					return m, nil
 				}
-				m.Fields[m.Cursor] = m.textBuf
-				m.inTextEdit = false
-				m.textBuf = ""
-				m.textErr = ""
-				m.ov = nil
-				m.CharPos = len(m.Fields[m.Cursor])
+			case tea.KeyCtrlS:
+				// Apply the value being typed, then save the whole form: without
+				// this Ctrl+S was silently ignored while a field editor was open.
+				if !m.applyTextEdit() {
+					return m, nil
+				}
+				m.IsActive = false
+				return m, func() tea.Msg { return SaveActionMsg{Fields: m.Fields} }
 			case tea.KeyEsc:
 				m.inTextEdit = false
 				m.textBuf = ""
@@ -394,6 +393,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Fields[m.Cursor] = "true"
 				} else {
 					m.Fields[m.Cursor] = "false"
+				}
+				if m.isProxied() {
+					// Cloudflare keeps TTL Auto for proxied records whatever is sent.
+					if idx := m.fieldIndex("ttl"); idx >= 0 {
+						m.Fields[idx] = autoTTLLabel
+					}
 				}
 				m.inBoolSelect = false
 				m.ov = nil
@@ -544,6 +549,53 @@ func (m *Model) isTypeField(i int) bool {
 
 var supportedTypes = []string{"A", "AAAA", "CNAME", "TXT", "MX", "NS", "SRV", "CAA"}
 
+// autoTTLLabel is the TTL value shown for Cloudflare's "Auto" TTL (1 second
+// in the API). Proxied records always use it.
+const autoTTLLabel = "Auto"
+
+// fieldIndex returns the index of the column with the given (lower-case) name,
+// or -1 when the form has no such column.
+func (m *Model) fieldIndex(name string) int {
+	for idx, col := range m.ColumnNames {
+		if strings.ToLower(col) == name && idx < len(m.Fields) {
+			return idx
+		}
+	}
+	return -1
+}
+
+// isProxied reports whether the record being edited is proxied.
+func (m *Model) isProxied() bool {
+	idx := m.fieldIndex("proxied")
+	return idx >= 0 && strings.ToLower(m.Fields[idx]) == "true"
+}
+
+// applyTextEdit validates the text buffer and stores it in the current field,
+// leaving text edit mode. It returns false (and keeps the editor open with an
+// error shown) when the value is invalid.
+func (m *Model) applyTextEdit() bool {
+	fieldName := strings.ToLower(m.ColumnNames[m.Cursor])
+	rrType := strings.ToUpper(m.currentType())
+	if errText := validateInput(fieldName, m.textBuf, rrType); errText != "" {
+		m.textErr = errText
+		return false
+	}
+	if fieldName == "ttl" && m.isProxied() && !strings.EqualFold(m.textBuf, autoTTLLabel) {
+		m.textErr = "Proxied records use TTL Auto: Cloudflare ignores other values"
+		return false
+	}
+	if fieldName == "ttl" && strings.EqualFold(m.textBuf, autoTTLLabel) {
+		m.textBuf = autoTTLLabel // normalize "auto" / "AUTO" to the display form
+	}
+	m.Fields[m.Cursor] = m.textBuf
+	m.inTextEdit = false
+	m.textBuf = ""
+	m.textErr = ""
+	m.ov = nil
+	m.CharPos = len(m.Fields[m.Cursor])
+	return true
+}
+
 // currentType returns current RR type from fields
 func (m *Model) currentType() string {
 	for idx, name := range m.ColumnNames {
@@ -558,8 +610,8 @@ func (m *Model) currentType() string {
 func validateInput(fieldName, value, rrType string) string {
 	switch fieldName {
 	case "ttl":
-		if !isNumber(value) {
-			return "TTL must be a number in seconds (e.g. 60, 300, 1800)"
+		if !isNumber(value) && !strings.EqualFold(value, autoTTLLabel) {
+			return "TTL must be a number in seconds (e.g. 60, 300, 1800) or Auto"
 		}
 		return ""
 	case "name":
@@ -570,15 +622,15 @@ func validateInput(fieldName, value, rrType string) string {
 	case "content":
 		switch strings.ToUpper(rrType) {
 		case "A":
-		if value != "@" && !isIPv4(value) {
+			if value != "@" && !isIPv4(value) {
 				return "Content must be a valid IPv4 address for A record"
 			}
 		case "AAAA":
-		if value != "@" && !isIPv6(value) {
+			if value != "@" && !isIPv6(value) {
 				return "Content must be a valid IPv6 address for AAAA record"
 			}
 		case "CNAME", "NS", "MX":
-		if value != "@" && !isHostname(value) {
+			if value != "@" && !isHostname(value) {
 				return "Content must be a valid hostname"
 			}
 		default:
@@ -733,6 +785,9 @@ func (t *textView) View() string {
 			colName = strings.ToLower(t.parent.ColumnNames[t.parent.Cursor])
 		}
 		hintText = textHint(colName, strings.ToUpper(t.parent.currentType()))
+		if colName == "ttl" && t.parent.isProxied() {
+			hintText = "Proxied record: TTL is always Auto"
+		}
 	}
 	hint := helpTextStyle.Render(hintText)
 	errLine := ""
@@ -740,7 +795,7 @@ func (t *textView) View() string {
 		errStyle := lipgloss.NewStyle().Foreground(theme.Color.Red)
 		errLine = errStyle.Render(t.parent.textErr)
 	}
-	help := helpTextStyle.Render("[Enter] Apply  [Esc] Cancel")
+	help := helpTextStyle.Render("[Enter] Apply  [Ctrl+S] Apply and save  [Esc] Cancel")
 	body := lipgloss.JoinVertical(lipgloss.Top, header, value, hint, errLine, help)
 	return boolModalBorder.Render(body)
 }
@@ -749,7 +804,7 @@ func (t *textView) View() string {
 func textHint(fieldName, rrType string) string {
 	switch fieldName {
 	case "ttl":
-		return "TTL in seconds, e.g. 60, 300, 1800"
+		return "TTL in seconds, e.g. 60, 300, 1800, or Auto"
 	case "name":
 		return "Record name (hostname), e.g. www or api.example.com"
 	case "content":
