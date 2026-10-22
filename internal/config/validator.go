@@ -150,6 +150,15 @@ func (pc *ProviderConfig) validateCloudflare(name string) error {
 		})
 	}
 
+	// Prefixed (scannable) credentials reveal their type: catch a Global API Key
+	// placed into api_token (and vice versa) before the API rejects it.
+	if err := creds.CheckPrefixes(); err != nil {
+		errors = append(errors, &ValidationError{
+			Field:   fmt.Sprintf("providers.%s.credentials", name),
+			Message: err.Error(),
+		})
+	}
+
 	if len(errors) > 0 {
 		var errMsgs []string
 		for _, err := range errors {
@@ -187,4 +196,3 @@ func (c *Config) GetClientTimeout() time.Duration {
 	}
 	return c.ClientTimeout
 }
-

@@ -18,6 +18,8 @@ limitations under the License.
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,16 +57,47 @@ type ProviderConfig struct {
 	Options map[string]interface{} `mapstructure:"options" yaml:"options"`
 }
 
+// Prefixes of Cloudflare credentials in the scannable format (introduced in
+// 2026). Legacy credentials have no prefix: API tokens are 40 alphanumeric
+// characters, the Global API Key is a 37-45 character hex string. Both formats
+// are accepted by the API.
+// See https://developers.cloudflare.com/fundamentals/api/get-started/token-formats/
+const (
+	// CloudflareGlobalKeyPrefix marks a Global API Key (goes to api_key + email).
+	CloudflareGlobalKeyPrefix = "cfk_"
+	// CloudflareUserTokenPrefix marks a User API Token (goes to api_token).
+	CloudflareUserTokenPrefix = "cfut_"
+	// CloudflareAccountTokenPrefix marks an Account API Token (goes to api_token).
+	CloudflareAccountTokenPrefix = "cfat_"
+)
+
 // CloudflareCredentials holds Cloudflare-specific credentials.
 type CloudflareCredentials struct {
-	// APIToken is the Cloudflare API token
+	// APIToken is the Cloudflare API token (User or Account API Token)
 	APIToken string `mapstructure:"api_token" yaml:"api_token"`
 
-	// APIKey is the Cloudflare API key (alternative to token)
+	// APIKey is the Cloudflare Global API Key (alternative to token)
 	APIKey string `mapstructure:"api_key" yaml:"api_key"`
 
 	// Email is the Cloudflare account email (required with APIKey)
 	Email string `mapstructure:"email" yaml:"email"`
+}
+
+// CheckPrefixes verifies that prefixed credentials are placed in the right
+// fields: a Global API Key (cfk_) belongs to api_key, API tokens (cfut_, cfat_)
+// belong to api_token. Unprefixed (legacy) values are accepted as is.
+func (c *CloudflareCredentials) CheckPrefixes() error {
+	if strings.HasPrefix(c.APIToken, CloudflareGlobalKeyPrefix) {
+		return fmt.Errorf("api_token looks like a Global API Key (%s prefix): "+
+			"put it into api_key and set email instead", CloudflareGlobalKeyPrefix)
+	}
+	if strings.HasPrefix(c.APIKey, CloudflareUserTokenPrefix) ||
+		strings.HasPrefix(c.APIKey, CloudflareAccountTokenPrefix) {
+		return fmt.Errorf("api_key looks like an API token (%s/%s prefix): "+
+			"put it into api_token instead",
+			CloudflareUserTokenPrefix, CloudflareAccountTokenPrefix)
+	}
+	return nil
 }
 
 // GetCloudflareCredentials extracts Cloudflare credentials from provider config.
@@ -112,10 +145,10 @@ func (pc *ProviderConfig) GetRegRuCredentials() (*RegRuCredentials, error) {
 
 // Namecheap credential key names used in ProviderConfig.Credentials map.
 const (
-	NamecheapCredKeyAPIUser   = "api_user"
-	NamecheapCredKeyAPIKey    = "api_key"
-	NamecheapCredKeyUserName  = "username"
-	NamecheapCredKeySandbox   = "sandbox"
+	NamecheapCredKeyAPIUser  = "api_user"
+	NamecheapCredKeyAPIKey   = "api_key"
+	NamecheapCredKeyUserName = "username"
+	NamecheapCredKeySandbox  = "sandbox"
 )
 
 // NamecheapCredentials holds Namecheap-specific credentials.
