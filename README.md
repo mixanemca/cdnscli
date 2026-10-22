@@ -54,7 +54,7 @@ Create a configuration file `~/.cdnscli.yaml` in your home directory:
 
 ### Cloudflare
 
-Login to [Cloudflare dashboard](https://dash.cloudflare.com/login), go to `My Account` → `API Tokens` and create a new token.
+Login to [Cloudflare dashboard](https://dash.cloudflare.com/login), go to `My Account` → `API Tokens` and create a new token with the `Zone:Read` and `DNS:Edit` permissions.
 
 ```yaml
 default-provider: cloudflare
@@ -65,12 +65,22 @@ providers:
   cloudflare:
     type: cloudflare
     credentials:
-      api_token: your-cloudflare-api-token-here
-    # Alternative authentication (api_key + email):
+      api_token: cfut_your-cloudflare-api-token-here
+    # Alternative authentication (Global API Key + email):
     # credentials:
-    #   api_key: your-api-key
+    #   api_key: cfk_your-global-api-key
     #   email: your-email@example.com
 ```
+
+Cloudflare issues credentials in a prefixed, scannable [format](https://developers.cloudflare.com/fundamentals/api/get-started/token-formats/); legacy unprefixed values keep working:
+
+| Credential        | Prefix  | Config field        |
+| ----------------- | ------- | ------------------- |
+| User API Token    | `cfut_` | `api_token`         |
+| Account API Token | `cfat_` | `api_token`         |
+| Global API Key    | `cfk_`  | `api_key` + `email` |
+
+Copy the value in full: the prefix is part of the secret. A `cfk_` key placed into `api_token` (or a token placed into `api_key`) is rejected at config validation with a hint.
 
 ### Reg.ru
 

@@ -19,11 +19,16 @@ providers:
     type: cloudflare
     # display-name: Cloudflare  # Optional: custom display name for the provider (defaults to "Cloudflare" for cloudflare type)
     credentials:
-      # Option 1: Use API token (recommended)
-      api_token: your-cloudflare-api-token-here
-      
-      # Option 2: Use API key + email (alternative)
-      # api_key: your-api-key
+      # Option 1: Use API token (recommended).
+      # Both User API Tokens (cfut_...) and Account API Tokens (cfat_...) work,
+      # as well as legacy 40-character tokens without a prefix.
+      # Copy the token in full: the prefix is part of the secret.
+      api_token: cfut_your-cloudflare-api-token-here
+
+      # Option 2: Use Global API Key + email (alternative).
+      # The key starts with cfk_ (legacy keys are an unprefixed hex string).
+      # A cfk_ value must go here, not into api_token.
+      # api_key: cfk_your-global-api-key
       # email: your-email@example.com
 
   regru:
