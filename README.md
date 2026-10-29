@@ -123,6 +123,8 @@ providers:
 
 > **Note**: Namecheap requires your public IP to be whitelisted in the API settings. The tool detects your current IP automatically using `https://api.ipify.org` by default. You can override this with the `ip_provider_url` option.
 
+> **Note**: The Namecheap API allows 20 requests per minute. The client throttles itself to that rate and retries transient errors, so listing many zones may take a while instead of failing. Every record change rewrites the whole zone (the API has no per-record calls) and is verified by re-reading it; if the zone changes concurrently, the change is retried up to 3 times before an error is reported.
+
 ### Multiple Providers
 
 You can configure multiple providers of the same or different types simultaneously:
@@ -316,7 +318,7 @@ brew install mixanemca/tap/cdnscli
 go install github.com/mixanemca/cdnscli@latest
 ```
 
-> **Note**: You can also install a specific version by replacing `@latest` with `@v0.99.0` (or any other version tag).
+> **Note**: You can also install a specific version by replacing `@latest` with `@v0.99.0` (or any other version tag). Building from source requires Go 1.26.6 or newer.
 
 ### Build from Source
 
