@@ -17,11 +17,14 @@ limitations under the License.
 package providers
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/mixanemca/cdnscli/internal/config"
+	namecheap "github.com/namecheap/go-namecheap-sdk/v2/namecheap"
+	"github.com/namecheap/go-namecheap-sdk/v2/namecheaptest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -185,4 +188,118 @@ func TestDetectPublicIP_EmptyResponse(t *testing.T) {
 func TestDetectPublicIP_ServerError(t *testing.T) {
 	_, err := detectPublicIP("http://127.0.0.1:1") // nothing listening
 	assert.Error(t, err)
+}
+
+// newIPProviderServer serves a fixed public IP for the factory to detect.
+func newIPProviderServer(t *testing.T, ip string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, ip)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// useNamecheapMockAPI points the factory at the mock Namecheap API for the test.
+func useNamecheapMockAPI(t *testing.T, srv *namecheaptest.Server) {
+	t.Helper()
+	namecheapAPIBaseURL = srv.URL()
+	t.Cleanup(func() { namecheapAPIBaseURL = "" })
+}
+
+func TestNamecheapFactory_CreateProvider_Success(t *testing.T) {
+	srv := namecheaptest.NewServer(t)
+	srv.StubFixture("namecheap.domains.getList", "domains_getList")
+	useNamecheapMockAPI(t, srv)
+	ipServer := newIPProviderServer(t, "203.0.113.7")
+
+	factory := NewNamecheapFactory()
+	cfg := &config.ProviderConfig{
+		Type: "namecheap",
+		Credentials: map[string]interface{}{
+			"api_user": "some-user",
+			"api_key":  "some-key",
+			"username": "other-user",
+		},
+		Options: map[string]interface{}{
+			"ip_provider_url": ipServer.URL,
+		},
+	}
+
+	provider, err := factory.CreateProvider(cfg)
+
+	require.NoError(t, err)
+	assert.NotNil(t, provider)
+	srv.AssertCalled(t, "namecheap.domains.getList", map[string]string{
+		"ApiUser":  "some-user",
+		"ApiKey":   "some-key",
+		"Username": "other-user",
+		"ClientIp": "203.0.113.7",
+		"PageSize": "10",
+	})
+}
+
+func TestNamecheapFactory_CreateProvider_AccessDenied(t *testing.T) {
+	srv := namecheaptest.NewServer(t)
+	srv.StubError("namecheap.domains.getList", 4011103, "Access denied")
+	useNamecheapMockAPI(t, srv)
+	ipServer := newIPProviderServer(t, "203.0.113.7")
+
+	factory := NewNamecheapFactory()
+	cfg := &config.ProviderConfig{
+		Type: "namecheap",
+		Credentials: map[string]interface{}{
+			"api_user": "some-user",
+			"api_key":  "some-key",
+		},
+		Options: map[string]interface{}{
+			"ip_provider_url": ipServer.URL,
+		},
+	}
+
+	provider, err := factory.CreateProvider(cfg)
+
+	assert.Nil(t, provider)
+	require.Error(t, err)
+	var credsErr *ProviderCredentialsError
+	require.ErrorAs(t, err, &credsErr)
+	assert.Contains(t, credsErr.Error(), "203.0.113.7 is not whitelisted")
+	assert.ErrorIs(t, err, namecheap.ErrAccessDenied)
+}
+
+func TestNamecheapFactory_CreateProvider_VerifyFails(t *testing.T) {
+	srv := namecheaptest.NewServer(t)
+	srv.StubError("namecheap.domains.getList", 2030166, "Domain is invalid")
+	useNamecheapMockAPI(t, srv)
+	ipServer := newIPProviderServer(t, "203.0.113.7")
+
+	factory := NewNamecheapFactory()
+	cfg := &config.ProviderConfig{
+		Type: "namecheap",
+		Credentials: map[string]interface{}{
+			"api_user": "some-user",
+			"api_key":  "some-key",
+		},
+		Options: map[string]interface{}{
+			"ip_provider_url": ipServer.URL,
+		},
+	}
+
+	provider, err := factory.CreateProvider(cfg)
+
+	assert.Nil(t, provider)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "failed to verify credentials")
+	assert.ErrorIs(t, err, namecheap.ErrDomainInvalid)
+}
+
+func TestDetectPublicIP_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	_, err := detectPublicIP(server.URL)
+
+	assert.ErrorContains(t, err, "unexpected HTTP status")
 }

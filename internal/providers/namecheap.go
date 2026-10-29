@@ -18,6 +18,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,7 +27,23 @@ import (
 	namecheap "github.com/namecheap/go-namecheap-sdk/v2/namecheap"
 )
 
-const namecheapListZonesPageSize = 100
+const (
+	// namecheapListZonesPageSize is the largest page size domains.getList accepts.
+	namecheapListZonesPageSize = 100
+
+	// namecheapConflictRetries is how many read-modify-write-verify cycles a record
+	// mutation attempts before giving up with ErrConcurrentModification.
+	namecheapConflictRetries = 3
+
+	// namecheapDefaultMXPref is the MX preference assigned to records created by
+	// cdnscli. Namecheap reports MXPref="10" for every host record it returns,
+	// including A, CNAME and TXT (see the official getHosts examples and the SDK's
+	// captured fixtures). The SDK verifies a write by re-reading the zone and
+	// comparing records MXPref-inclusive, so a record sent without MXPref would never
+	// match its echo and every mutation would be reported as a concurrent
+	// modification.
+	namecheapDefaultMXPref uint8 = 10
+)
 
 type repoNamecheap struct {
 	client *namecheap.Client
@@ -53,78 +70,51 @@ func (r *repoNamecheap) GetDNSRecord(ctx context.Context, zoneID, recordID strin
 }
 
 func (r *repoNamecheap) CreateDNSRecord(ctx context.Context, params models.CreateDNSRecordParams) (models.DNSRecord, error) {
-	domain := strings.TrimSpace(params.ZoneName)
-	if domain == "" {
-		domain = strings.TrimSpace(params.ZoneID)
-	}
-	if domain == "" {
-		return models.DNSRecord{}, fmt.Errorf("zone name or zone ID must be provided")
-	}
-
-	result, err := r.getHosts(domain)
+	domain, err := namecheapDomain(params.ZoneName, params.ZoneID)
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	var existing []namecheap.DomainsDNSHostRecordDetailed
-	if result.Hosts != nil {
-		existing = *result.Hosts
-	}
+	record := convParamsToNamecheapRecord(params)
+	records := []namecheap.DomainsDNSHostRecord{record}
 
-	newHost := convParamsToNamecheapHost(params)
-	updated := append(existing, newHost)
-
-	if err := r.setHosts(domain, updated, result.EmailType); err != nil {
-		return models.DNSRecord{}, err
-	}
-
-	// Fetch fresh list to get the assigned HostId
-	records, err := r.ListDNSRecords(ctx, domain)
+	opts, err := r.mutationOptions(ctx, domain, namecheap.AddOp(record), isMailRecordType(params.Type))
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	hostName := relativeHostName(params.Name, domain)
-	for i := len(records) - 1; i >= 0; i-- {
-		rec := records[i]
-		if rec.Type == params.Type && rec.Content == params.Content &&
-			(relativeHostName(rec.Name, domain) == hostName || rec.Name == hostName) {
-			return rec, nil
-		}
+	if _, err := r.client.DomainsDNS.AddRecordsWithContext(ctx, domain, records, opts...); err != nil {
+		return models.DNSRecord{}, wrapNamecheapMutationError(domain, err)
 	}
 
-	return models.DNSRecord{}, fmt.Errorf("created record not found after setHosts")
+	return r.findRecord(ctx, domain, record)
 }
 
 func (r *repoNamecheap) DeleteDNSRecord(ctx context.Context, zoneID, recordID string) error {
-	result, err := r.getHosts(zoneID)
+	hosts, err := r.getHosts(ctx, zoneID)
 	if err != nil {
 		return err
 	}
 
-	if result.Hosts == nil {
-		return fmt.Errorf("record with ID %s not found in zone %s", recordID, zoneID)
+	target, err := findHostByID(hosts, zoneID, recordID)
+	if err != nil {
+		return err
 	}
 
-	filtered := make([]namecheap.DomainsDNSHostRecordDetailed, 0, len(*result.Hosts))
-	found := false
-	for _, h := range *result.Hosts {
-		if h.HostId != nil && strconv.Itoa(*h.HostId) == recordID {
-			found = true
-			continue
-		}
-		filtered = append(filtered, h)
+	selector := selectorForHost(target)
+	mail := isMailRecordType(derefString(target.Type))
+
+	opts, err := r.mutationOptions(ctx, zoneID, namecheap.DeleteOp(selector), mail)
+	if err != nil {
+		return err
 	}
 
-	if !found {
-		return fmt.Errorf("record with ID %s not found in zone %s", recordID, zoneID)
-	}
-
-	return r.setHosts(zoneID, filtered, result.EmailType)
+	_, err = r.client.DomainsDNS.DeleteRecordsWithContext(ctx, zoneID, selector, opts...)
+	return wrapNamecheapMutationError(zoneID, err)
 }
 
 func (r *repoNamecheap) ListDNSRecords(ctx context.Context, id string) ([]models.DNSRecord, error) {
-	result, err := r.getHosts(id)
+	result, err := r.getHosts(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -141,45 +131,31 @@ func (r *repoNamecheap) ListDNSRecords(ctx context.Context, id string) ([]models
 }
 
 func (r *repoNamecheap) ListZones(ctx context.Context, z ...string) ([]models.Zone, error) {
-	pageSize := namecheapListZonesPageSize
-	page := 1
-	var allDomains []namecheap.Domain
-
-	for {
-		args := &namecheap.DomainsGetListArgs{
-			PageSize: namecheap.Int(pageSize),
-			Page:     namecheap.Int(page),
-		}
-
-		if len(z) > 0 && z[0] != "" {
-			args.SearchTerm = namecheap.String(z[0])
-		}
-
-		resp, err := r.client.Domains.GetList(args)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.Domains == nil || len(*resp.Domains) == 0 {
-			break
-		}
-
-		allDomains = append(allDomains, *resp.Domains...)
-
-		if resp.Paging == nil || resp.Paging.TotalItems == nil {
-			break
-		}
-		if page*pageSize >= *resp.Paging.TotalItems {
-			break
-		}
-		page++
+	args := &namecheap.DomainsGetListArgs{
+		PageSize: namecheap.Int(namecheapListZonesPageSize),
+	}
+	if len(z) > 0 && z[0] != "" {
+		args.SearchTerm = namecheap.String(z[0])
 	}
 
-	zones := convFromNamecheapDomains(allDomains)
+	domains, err := r.client.Domains.ListAllSlice(ctx, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list domains: %w", err)
+	}
 
-	for i, zone := range zones {
-		resp, err := r.client.DomainsDNS.GetList(zone.Name)
-		if err == nil && resp.DomainDNSGetListResult != nil && resp.DomainDNSGetListResult.Nameservers != nil {
+	zones := convFromNamecheapDomains(domains)
+
+	for i := range zones {
+		resp, err := r.client.DomainsDNS.GetListWithContext(ctx, zones[i].Name)
+		if err != nil {
+			// Nameservers are informational: an API error for one zone does not
+			// fail the listing, but a cancelled or expired context always does.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			continue
+		}
+		if resp != nil && resp.DomainDNSGetListResult != nil && resp.DomainDNSGetListResult.Nameservers != nil {
 			zones[i].NameServers = *resp.DomainDNSGetListResult.Nameservers
 		}
 	}
@@ -188,47 +164,36 @@ func (r *repoNamecheap) ListZones(ctx context.Context, z ...string) ([]models.Zo
 }
 
 func (r *repoNamecheap) UpdateDNSRecord(ctx context.Context, params models.UpdateDNSRecordParams) (models.DNSRecord, error) {
-	domain := strings.TrimSpace(params.ZoneName)
-	if domain == "" {
-		domain = strings.TrimSpace(params.ZoneID)
-	}
-	if domain == "" {
-		return models.DNSRecord{}, fmt.Errorf("zone name or zone ID must be provided")
-	}
-
-	result, err := r.getHosts(domain)
+	domain, err := namecheapDomain(params.ZoneName, params.ZoneID)
 	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	if result.Hosts == nil {
-		return models.DNSRecord{}, fmt.Errorf("record with ID %s not found in zone %s", params.ID, domain)
-	}
-
-	updated := make([]namecheap.DomainsDNSHostRecordDetailed, 0, len(*result.Hosts))
-	found := false
-	for _, h := range *result.Hosts {
-		if h.HostId != nil && strconv.Itoa(*h.HostId) == params.ID {
-			hostName := relativeHostName(params.Name, domain)
-			ttl := params.TTL
-			h.Name = namecheap.String(hostName)
-			h.Type = namecheap.String(params.Type)
-			h.Address = namecheap.String(params.Content)
-			h.TTL = &ttl
-			found = true
-		}
-		updated = append(updated, h)
-	}
-
-	if !found {
-		return models.DNSRecord{}, fmt.Errorf("record with ID %s not found in zone %s", params.ID, domain)
-	}
-
-	if err := r.setHosts(domain, updated, result.EmailType); err != nil {
+	hosts, err := r.getHosts(ctx, domain)
+	if err != nil {
 		return models.DNSRecord{}, err
 	}
 
-	return r.GetDNSRecord(ctx, domain, params.ID)
+	target, err := findHostByID(hosts, domain, params.ID)
+	if err != nil {
+		return models.DNSRecord{}, err
+	}
+
+	selector := selectorForHost(target)
+	record := convUpdateParamsToNamecheapRecord(params, target)
+	records := []namecheap.DomainsDNSHostRecord{record}
+	mail := isMailRecordType(derefString(target.Type), params.Type)
+
+	opts, err := r.mutationOptions(ctx, domain, namecheap.UpsertOp(selector, records), mail)
+	if err != nil {
+		return models.DNSRecord{}, err
+	}
+
+	if _, err := r.client.DomainsDNS.UpsertRecordsWithContext(ctx, domain, selector, records, opts...); err != nil {
+		return models.DNSRecord{}, wrapNamecheapMutationError(domain, err)
+	}
+
+	return r.findRecord(ctx, domain, record)
 }
 
 func (r *repoNamecheap) ZoneIDByName(zoneName string) (string, error) {
@@ -247,8 +212,8 @@ func (r *repoNamecheap) ZoneIDByName(zoneName string) (string, error) {
 }
 
 // getHosts fetches the full DNS host record result for a domain.
-func (r *repoNamecheap) getHosts(domain string) (*namecheap.DomainDNSGetHostsResult, error) {
-	resp, err := r.client.DomainsDNS.GetHosts(domain)
+func (r *repoNamecheap) getHosts(ctx context.Context, domain string) (*namecheap.DomainDNSGetHostsResult, error) {
+	resp, err := r.client.DomainsDNS.GetHostsWithContext(ctx, domain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get DNS hosts for %s: %w", domain, err)
 	}
@@ -258,31 +223,123 @@ func (r *repoNamecheap) getHosts(domain string) (*namecheap.DomainDNSGetHostsRes
 	return resp.DomainDNSGetHostsResult, nil
 }
 
-// setHosts replaces all DNS records for a domain, preserving EmailType.
-func (r *repoNamecheap) setHosts(domain string, hosts []namecheap.DomainsDNSHostRecordDetailed, emailType *string) error {
-	records := make([]namecheap.DomainsDNSHostRecord, 0, len(hosts))
-	for _, h := range hosts {
-		rec := namecheap.DomainsDNSHostRecord{
-			HostName:   h.Name,
-			RecordType: h.Type,
-			Address:    h.Address,
-			TTL:        h.TTL,
-		}
-		if h.MXPref != nil {
-			mxPref := uint8(*h.MXPref)
-			rec.MXPref = &mxPref
-		}
-		records = append(records, rec)
+// mutationOptions builds the options for a record mutation: automatic retry when a
+// concurrent modification is detected and, for changes that touch mail records, the
+// EmailType transition Namecheap requires. A zone accepts MX records only with
+// EmailType=MX and has to drop back to NONE once the last MX record is gone, so the
+// change is planned first and the required EmailType is written together with it.
+func (r *repoNamecheap) mutationOptions(ctx context.Context, domain string, op namecheap.RecordOp, mail bool) ([]namecheap.RecordOption, error) {
+	opts := []namecheap.RecordOption{namecheap.WithRetryOnConflict(namecheapConflictRetries)}
+	if !mail {
+		return opts, nil
 	}
 
-	args := &namecheap.DomainsDNSSetHostsArgs{
-		Domain:    namecheap.String(domain),
-		Records:   &records,
-		EmailType: emailType,
+	diff, err := r.client.DomainsDNS.PlanWithContext(ctx, domain, op)
+	if err != nil {
+		return nil, fmt.Errorf("failed to plan DNS change for %s: %w", domain, err)
+	}
+	if !diff.Satisfiable {
+		return nil, fmt.Errorf("DNS change for %s is not applicable: "+
+			"a zone cannot hold both MX and MXE records or more than one MXE record", domain)
+	}
+	if diff.RequiredEmailType != "" {
+		opts = append(opts, namecheap.WithEmailType(diff.RequiredEmailType))
+	}
+	return opts, nil
+}
+
+// findRecord re-reads the zone and returns the record matching want by host name,
+// type and address. The SDK's write result carries no HostId, so this is the only
+// way to learn the identifier Namecheap assigned.
+func (r *repoNamecheap) findRecord(ctx context.Context, domain string, want namecheap.DomainsDNSHostRecord) (models.DNSRecord, error) {
+	hosts, err := r.getHosts(ctx, domain)
+	if err != nil {
+		return models.DNSRecord{}, err
 	}
 
-	_, err := r.client.DomainsDNS.SetHosts(args)
-	return err
+	if hosts.Hosts != nil {
+		list := *hosts.Hosts
+		for i := len(list) - 1; i >= 0; i-- {
+			if sameNamecheapRecord(namecheap.RecordFromDetailed(list[i]), want) {
+				return convFromNamecheapHost(list[i], domain), nil
+			}
+		}
+	}
+
+	return models.DNSRecord{}, fmt.Errorf("record %s %s %s not found in zone %s after the change",
+		derefString(want.HostName), derefString(want.RecordType), derefString(want.Address), domain)
+}
+
+// findHostByID returns the host record with the given HostId.
+func findHostByID(hosts *namecheap.DomainDNSGetHostsResult, domain, recordID string) (namecheap.DomainsDNSHostRecordDetailed, error) {
+	if hosts.Hosts != nil {
+		for _, h := range *hosts.Hosts {
+			if h.HostId != nil && strconv.Itoa(*h.HostId) == recordID {
+				return h, nil
+			}
+		}
+	}
+	return namecheap.DomainsDNSHostRecordDetailed{},
+		fmt.Errorf("record with ID %s not found in zone %s", recordID, domain)
+}
+
+// selectorForHost builds a selector that matches exactly the given host record.
+func selectorForHost(h namecheap.DomainsDNSHostRecordDetailed) namecheap.RecordSelector {
+	rec := namecheap.RecordFromDetailed(h)
+	return namecheap.RecordSelector{
+		HostName:   rec.HostName,
+		RecordType: rec.RecordType,
+		Address:    rec.Address,
+		MXPref:     rec.MXPref,
+	}
+}
+
+// sameNamecheapRecord reports whether two records denote the same host name, type
+// and address in normalized form, ignoring TTL and MX preference.
+func sameNamecheapRecord(a, b namecheap.DomainsDNSHostRecord) bool {
+	na := namecheap.NormalizeRecord(a)
+	nb := namecheap.NormalizeRecord(b)
+	return *na.HostName == *nb.HostName &&
+		*na.RecordType == *nb.RecordType &&
+		*na.Address == *nb.Address
+}
+
+// isMailRecordType reports whether any of the types is an MX or MXE record, whose
+// presence is coupled to the zone EmailType.
+func isMailRecordType(types ...string) bool {
+	for _, t := range types {
+		switch strings.ToUpper(strings.TrimSpace(t)) {
+		case namecheap.RecordTypeMX, namecheap.RecordTypeMXE:
+			return true
+		}
+	}
+	return false
+}
+
+// wrapNamecheapMutationError adds the zone to a record mutation error and explains a
+// concurrent modification that survived the retries.
+func wrapNamecheapMutationError(domain string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, namecheap.ErrConcurrentModification) {
+		return fmt.Errorf("DNS zone %s changed concurrently, gave up after %d attempts: %w",
+			domain, namecheapConflictRetries, err)
+	}
+	return fmt.Errorf("failed to change DNS records of %s: %w", domain, err)
+}
+
+// namecheapDomain picks the zone name from the params, falling back to the zone ID
+// (which equals the domain name for this provider).
+func namecheapDomain(zoneName, zoneID string) (string, error) {
+	domain := strings.TrimSpace(zoneName)
+	if domain == "" {
+		domain = strings.TrimSpace(zoneID)
+	}
+	if domain == "" {
+		return "", fmt.Errorf("zone name or zone ID must be provided")
+	}
+	return domain, nil
 }
 
 // relativeHostName strips the domain suffix from a FQDN to get a relative host name.
@@ -299,6 +356,13 @@ func relativeHostName(name, domain string) string {
 	return name
 }
 
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 // Conversion functions
 
 func convFromNamecheapHost(h namecheap.DomainsDNSHostRecordDetailed, domain string) models.DNSRecord {
@@ -307,43 +371,28 @@ func convFromNamecheapHost(h namecheap.DomainsDNSHostRecordDetailed, domain stri
 		id = strconv.Itoa(*h.HostId)
 	}
 
-	var name string
-	if h.Name != nil {
-		name = *h.Name
-	}
-
 	var ttl int
 	if h.TTL != nil {
 		ttl = *h.TTL
 	}
 
-	var recType string
-	if h.Type != nil {
-		recType = *h.Type
-	}
-
-	var address string
-	if h.Address != nil {
-		address = *h.Address
-	}
-
 	return models.DNSRecord{
 		ID:      id,
-		Name:    name,
+		Name:    derefString(h.Name),
 		TTL:     ttl,
-		Type:    recType,
-		Content: address,
+		Type:    derefString(h.Type),
+		Content: derefString(h.Address),
 		Proxied: false,
 	}
 }
 
-func convFromNamecheapDomains(domains []namecheap.Domain) []models.Zone {
+func convFromNamecheapDomains(domains []*namecheap.Domain) []models.Zone {
 	result := make([]models.Zone, 0, len(domains))
 	for _, d := range domains {
-		var name string
-		if d.Name != nil {
-			name = *d.Name
+		if d == nil {
+			continue
 		}
+		name := derefString(d.Name)
 		// Zone ID equals domain name: all DNS operations (getHosts/setHosts) require the domain
 		// name, not Namecheap's internal numeric ID.
 		result = append(result, models.Zone{
@@ -354,18 +403,37 @@ func convFromNamecheapDomains(domains []namecheap.Domain) []models.Zone {
 	return result
 }
 
-func convParamsToNamecheapHost(params models.CreateDNSRecordParams) namecheap.DomainsDNSHostRecordDetailed {
+// newNamecheapRecord builds a setHosts record from cdnscli values. The host name is
+// made relative to the domain; a nil mxPref gets the cdnscli default.
+func newNamecheapRecord(domain, name, recordType, content string, ttl int, mxPref *uint8) namecheap.DomainsDNSHostRecord {
+	pref := namecheapDefaultMXPref
+	if mxPref != nil {
+		pref = *mxPref
+	}
+	return namecheap.DomainsDNSHostRecord{
+		HostName:   namecheap.String(relativeHostName(name, domain)),
+		RecordType: namecheap.String(recordType),
+		Address:    namecheap.String(content),
+		TTL:        namecheap.Int(ttl),
+		MXPref:     namecheap.UInt8(pref),
+	}
+}
+
+func convParamsToNamecheapRecord(params models.CreateDNSRecordParams) namecheap.DomainsDNSHostRecord {
 	domain := params.ZoneName
 	if domain == "" {
 		domain = params.ZoneID
 	}
-	hostName := relativeHostName(params.Name, domain)
-	ttl := params.TTL
+	return newNamecheapRecord(domain, params.Name, params.Type, params.Content, params.TTL, nil)
+}
 
-	return namecheap.DomainsDNSHostRecordDetailed{
-		Name:    namecheap.String(hostName),
-		Type:    namecheap.String(params.Type),
-		Address: namecheap.String(params.Content),
-		TTL:     &ttl,
+// convUpdateParamsToNamecheapRecord builds the replacement record for an update,
+// keeping the MX preference of the record being replaced.
+func convUpdateParamsToNamecheapRecord(params models.UpdateDNSRecordParams, old namecheap.DomainsDNSHostRecordDetailed) namecheap.DomainsDNSHostRecord {
+	domain := params.ZoneName
+	if domain == "" {
+		domain = params.ZoneID
 	}
+	mxPref := namecheap.RecordFromDetailed(old).MXPref
+	return newNamecheapRecord(domain, params.Name, params.Type, params.Content, params.TTL, mxPref)
 }

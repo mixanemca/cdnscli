@@ -17,17 +17,40 @@ limitations under the License.
 package providers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mixanemca/cdnscli/internal/config"
 	namecheap "github.com/namecheap/go-namecheap-sdk/v2/namecheap"
 )
 
-const defaultIPProviderURL = "https://api.ipify.org"
+const (
+	defaultIPProviderURL = "https://api.ipify.org"
+
+	// namecheapUserAgent is appended to the SDK User-Agent so Namecheap support can
+	// identify the calling client.
+	namecheapUserAgent = "cdnscli"
+
+	// namecheapVerifyTimeout bounds the credentials check performed when the
+	// provider is created.
+	namecheapVerifyTimeout = 30 * time.Second
+
+	// namecheapIPDetectTimeout bounds the public IP lookup.
+	namecheapIPDetectTimeout = 10 * time.Second
+
+	// namecheapVerifyPageSize is the smallest page size domains.getList accepts.
+	namecheapVerifyPageSize = 10
+)
+
+// namecheapAPIBaseURL overrides the Namecheap API endpoint when non-empty.
+// It exists for tests that point the factory at a mock server.
+var namecheapAPIBaseURL string
 
 type namecheapFactory struct{}
 
@@ -89,27 +112,62 @@ func (f *namecheapFactory) CreateProvider(cfg *config.ProviderConfig) (Provider,
 		ApiKey:     apiKey,
 		ClientIp:   clientIP,
 		UseSandbox: creds.UseSandbox,
+		UserAgent:  namecheapUserAgent,
 	})
+	if namecheapAPIBaseURL != "" {
+		client.BaseURL = namecheapAPIBaseURL
+	}
 
-	// Verify credentials by listing domains
-	_, err = client.Domains.GetList(nil)
-	if err != nil {
-		return nil, NewProviderCredentialsError("namecheap",
-			"failed to verify credentials (api_user/api_key may be invalid or client IP not whitelisted)", err)
+	if err := verifyNamecheapCredentials(client, clientIP); err != nil {
+		return nil, err
 	}
 
 	repo := NewRepoNamecheap(client)
 	return NewProvider(repo), nil
 }
 
+// verifyNamecheapCredentials performs the cheapest authenticated call to make sure
+// the API user, key and client IP are accepted before any command runs.
+func verifyNamecheapCredentials(client *namecheap.Client, clientIP string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), namecheapVerifyTimeout)
+	defer cancel()
+
+	_, err := client.Domains.GetListWithContext(ctx, &namecheap.DomainsGetListArgs{
+		PageSize: namecheap.Int(namecheapVerifyPageSize),
+	})
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, namecheap.ErrAccessDenied) {
+		return NewProviderCredentialsError("namecheap",
+			fmt.Sprintf("access denied: api_user/api_key may be invalid "+
+				"or client IP %s is not whitelisted in the Namecheap API settings", clientIP), err)
+	}
+
+	return NewProviderCredentialsError("namecheap", "failed to verify credentials", err)
+}
+
 // detectPublicIP fetches the public IP from the given URL.
 // Supports plain-text response ("1.2.3.4") and JSON ({"ip":"1.2.3.4"}).
 func detectPublicIP(ipProviderURL string) (string, error) {
-	resp, err := http.Get(ipProviderURL) //nolint:noctx
+	ctx, cancel := context.WithTimeout(context.Background(), namecheapIPDetectTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ipProviderURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("invalid IP provider URL: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected HTTP status %s from %s", resp.Status, ipProviderURL)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
